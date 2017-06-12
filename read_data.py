@@ -1,15 +1,15 @@
 import os
+import glob
 import time
 import json
 import pandas as pd
 
-# TODO: seems like this can be made more efficient
 def read_json_data():
 
     # define variables
     data = []
     folder = 'data/cvs/'
-    files = os.listdir(folder)[:2] # TODO: change this
+    files = os.listdir(folder)[:1] # TODO: change this
 
     # loop through files
     for file in files:
@@ -19,7 +19,21 @@ def read_json_data():
                 data.append(json.loads(line))
 
     df = pd.DataFrame(data)
+
     return df
+
+def read_ontology_data(ontology_name):
+    folder_name = 'data/ontology/' + ontology_name
+    allFiles = glob.glob(folder_name + "/*.csv")
+
+    for file in allFiles:
+        df = pd.read_csv(file)
+    return df
+
+
+# TODO: complete function to remove duplicates
+def preprocessing():
+    return 0
 
 if __name__ == "__main__":
 
@@ -27,7 +41,7 @@ if __name__ == "__main__":
     t0 = time.time()
 
     df = read_json_data()
-    # print(df['region'].head(50))
+    print(df.columns)
 
     # end time
     t1 = time.time()

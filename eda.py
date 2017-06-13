@@ -5,16 +5,19 @@ import seaborn as sns
 import pickle
 from wordcloud import WordCloud
 
-from read_data import read_json_data,read_ontology_data
+from read_data import read_json_data,read_ontology_data,read_general_csv
 from job_title_normalizer.ad_parsing import JobTitleNormalizer
 
-class graph_object():
+class ExploratoryDataAnalysis():
 
     def __init__(self, df):
         self.df = df
         self.years_bound = 60
 
-    # transform methods
+    ###############
+    # transformation methods
+    ###############
+
     def work_experience_months(self):
         df = self.df['total_months_work_exp'].astype('float').dropna()
         self.transformed_df = df[df < self.years_bound * 12]
@@ -23,23 +26,7 @@ class graph_object():
         df = self.df['total_months_work_exp'].astype('float').dropna()
         self.transformed_df = df[df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
 
-    # TODO: fill out industry people currently work in
-    def most_recent_industry(self):
-        # extract most recent company from df
-        most_recent_job_title = []
-        for i in range(0, len(df)):
-            if len(df['employment_history'][i]) > 0:
-                try:
-                    most_recent_job_title.append(df['employment_history'][i][0]['company_name'])
-                except KeyError:
-                    pass
 
-        self.transformed_df = pd.DataFrame(most_recent_job_title, columns=['most_recent_company_name'])
-
-        # company to industry mapping
-        pass
-
-    # TODO: fill out normalised job titles
     def most_recent_job_title(self):
 
         most_recent_job_title = []
@@ -68,24 +55,45 @@ class graph_object():
                     pass
 
         # cross reference with ontology
-        # TODO: complete cross reference against ontology
         print('reference against ontology...')
+        self.transformed_df = pd.DataFrame(most_recent_job_title, columns=['pt'])
 
-        # ontology = read_ontology_data('title-npt')
-        # self.transformed_df = pd.DataFrame(most_recent_job_title, columns=['npt'])
-        # self.transformed_df = self.transformed_df.join(ontology, on='npt', how='left', rsuffix='ont')
+        # temp saving
+        freq_df = pd.Series(self.transformed_df['pt']).value_counts().to_dict()
+        pickle.dump(freq_df, open("test_job_freq.pkl","wb"))
 
-        # # temp saving
-        # freq_df = pd.Series(most_recent_job_title).value_counts().to_dict()
-        # pickle.dump(freq_df, open("test_job_freq.pkl","wb"))
 
+    # TODO: think about how to deal with the unknowns?
+    def most_recent_job_category(self):
+
+        # generate job title category
+        ontology = read_ontology_data('title-category')
+        category_df = read_general_csv('data/ontology/categories.csv')
+        ontology.sort_values(['title', 'prob'], ascending=[True, False], inplace=True)
+        max_category_ont = ontology.groupby('title').first()
+        max_category_ont.reset_index(inplace=True)
+        right_df = pd.merge(max_category_ont,category_df,how='inner',on='category_id')
+        right_df.drop('prob', axis=1, inplace=True)
+
+        # load in normalized job categories + join
+        left_dict = pickle.load(open("test_job_freq.pkl", "rb"))
+        left_df = pd.DataFrame(list(left_dict.items()),columns=['title','count'])
+        merge_df = pd.merge(left_df, right_df, how='left', on='title')
+
+        # final transformations
+        self.transformed_df = merge_df.groupby(by='category_name')['count'].sum().reset_index()
+        max_count = max(self.transformed_df['count'])
+        self.transformed_df['count'] = self.transformed_df['count'] / max_count
 
     # TODO: rough location, depends on what people are doing
     def location(self):
 
         pass
 
-    # plot methods
+    ##########
+    # visualization methods
+    ##########
+
     def generate_histogram(self):
         ax = sns.distplot(self.transformed_df)
         return ax
@@ -98,6 +106,30 @@ class graph_object():
         plt.axis("off")
         plt.show()
 
+    def generate_bar_chart(self):
+        ax = sns.barplot(x='count',y='category_name',data=self.transformed_df)
+        return ax
+
+    # TODO: adjust normalization for the Unknown
+    def generate_industry_comparison_bar_chart(self):
+
+        # preparing total industry
+        total_industry_df = read_general_csv('data/manual/website_category_num.csv')
+        max_count = max(total_industry_df['count'])
+        total_industry_df['count'] = total_industry_df['count'] / max_count
+        total_industry_df['type'] = 'website'
+
+        # prepare transformed data
+        self.transformed_df['type'] = 'cv'
+        self.transformed_df = self.transformed_df[self.transformed_df['category_name'] != 'Unknown']
+        self.transformed_df.sort_values('count',ascending=False,inplace=True)
+
+        # join
+        total_df = pd.concat([self.transformed_df,total_industry_df],axis=0)
+        ax = sns.barplot(x='count', y='category_name', hue='type', data=total_df)
+
+        return ax
+
 
 if __name__ == '__main__':
 
@@ -105,12 +137,27 @@ if __name__ == '__main__':
     df = read_json_data()
 
     # transform data
-    graph = graph_object(df)
-    graph.most_recent_job_title()
+    graph = ExploratoryDataAnalysis(df)
+    graph.most_recent_job_category()
+    # print(graph.transformed_df.head(30))
+    #
+    ax = graph.generate_industry_comparison_bar_chart()
 
-    print(len(df))
-    print(graph.transformed_df.head(40))
-    print(len(graph.transformed_df))
+    plt.show(ax)
+
+
+    # graph.most_recent_job_title()
+    # graph.generate_word_cloud()
+    # graph.most_recent_job_category()
+
+
+    # print('Number of rows: ',len(df))
+    # print('Number of NaNs', graph.transformed_df['pt'].isnull().sum())
+    # print(graph.transformed_df.head(100))
+    # print(len(graph.transformed_df))
+
+
+
 
     # # plot graph
     # plt.show(ax)

@@ -4,12 +4,21 @@ import time
 import json
 import pandas as pd
 
+
+# TODO: any other preprocessing required?
+# TODO: look into errors created by this
+def preprocessing(df):
+    df.sort_values(['email_address','meta_date_of_cv_upload'],ascending=[True,False],inplace=True)
+    df.drop_duplicates('email_address',inplace=True)
+    return df
+
+
 def read_json_data():
 
     # define variables
     data = []
     folder = 'data/cvs/'
-    files = os.listdir(folder)[:1] # TODO: change this
+    files = os.listdir(folder)[4:5] # TODO: change this
 
     # loop through files
     for file in files:
@@ -30,10 +39,10 @@ def read_ontology_data(ontology_name):
         df = pd.read_csv(file)
     return df
 
+def read_general_csv(file_path):
+    df = pd.read_csv(file_path)
+    return df
 
-# TODO: complete function to remove duplicates
-def preprocessing():
-    return 0
 
 if __name__ == "__main__":
 
@@ -41,7 +50,7 @@ if __name__ == "__main__":
     t0 = time.time()
 
     df = read_json_data()
-    print(df.columns)
+    print(df.head(10))
 
     # end time
     t1 = time.time()

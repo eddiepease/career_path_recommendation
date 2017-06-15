@@ -6,19 +6,27 @@ import pandas as pd
 
 
 # TODO: any other preprocessing required?
-# TODO: look into errors created by this
 def preprocessing(df):
-    df.sort_values(['email_address','meta_date_of_cv_upload'],ascending=[True,False],inplace=True)
-    df.drop_duplicates('email_address',inplace=True)
-    return df
+    # split into 2 data frames
+    df_1 = df[df['email_address'].isnull() == False]
+    df_2 = df[df['email_address'].isnull() == True]
+
+    # transform df_1
+    df_1.sort_values('meta_date_of_cv_upload',ascending=False,inplace=True)
+    df_1.drop_duplicates('email_address',inplace=True)
+
+    # merge back together
+    df_result = pd.concat([df_1,df_2]).reset_index(drop=True)
+
+    return df_result
 
 
 def read_json_data():
 
     # define variables
     data = []
-    folder = 'data/cvs/'
-    files = os.listdir(folder)[4:5] # TODO: change this
+    folder = 'data/cvs_v2/'
+    files = os.listdir(folder)[1:2] # TODO: change this
 
     # loop through files
     for file in files:
@@ -27,7 +35,7 @@ def read_json_data():
             for line in f:
                 data.append(json.loads(line))
 
-    df = pd.DataFrame(data)
+    df = preprocessing(pd.DataFrame(data))
 
     return df
 
@@ -49,8 +57,19 @@ if __name__ == "__main__":
     # start time
     t0 = time.time()
 
+    # stuff
     df = read_json_data()
+
     print(df.head(10))
+    print(df.columns)
+
+    df_test = preprocessing(df)
+    # print(len(df_test))
+    # # print(df_test.head(10))
+    # # print(df_test.tail(10))
+
+
+
 
     # end time
     t1 = time.time()

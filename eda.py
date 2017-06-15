@@ -1,9 +1,12 @@
 import pandas as pd
 import numpy as np
+# import matplotlib
+# matplotlib.use('QT4Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
 from wordcloud import WordCloud
+from fuzzywuzzy import fuzz
 
 from read_data import read_json_data,read_ontology_data,read_general_csv
 from job_title_normalizer.ad_parsing import JobTitleNormalizer
@@ -27,7 +30,9 @@ class ExploratoryDataAnalysis():
         self.transformed_df = df[df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
 
 
-    def most_recent_job_title(self):
+    def most_recent_job_title(self, job_num=0):
+
+        # job_num defaults to most recent job (=0), 2nd most recent job - job_num=1 etc..
 
         most_recent_job_title = []
 
@@ -46,12 +51,16 @@ class ExploratoryDataAnalysis():
 
         # loop through df
         for i in range(0, len(df)):
+            # print(i)
+            # print(df['employment_history'][i])
             if len(df['employment_history'][i]) > 0:
                 try:
-                    raw_title = df['employment_history'][i][0]['raw_job_title']
+                    raw_title = df['employment_history'][i][job_num]['raw_job_title']
                     normalized_title = job_title_normalizer.process(raw_title)['title_norm']
                     most_recent_job_title.append(normalized_title)
                 except KeyError:
+                    pass
+                except IndexError:
                     pass
 
         # cross reference with ontology
@@ -63,7 +72,6 @@ class ExploratoryDataAnalysis():
         pickle.dump(freq_df, open("test_job_freq.pkl","wb"))
 
 
-    # TODO: think about how to deal with the unknowns?
     def most_recent_job_category(self):
 
         # generate job title category
@@ -82,11 +90,51 @@ class ExploratoryDataAnalysis():
 
         # final transformations
         self.transformed_df = merge_df.groupby(by='category_name')['count'].sum().reset_index()
+        self.transformed_df = self.transformed_df[self.transformed_df['category_name'] != 'Unknown']
         max_count = max(self.transformed_df['count'])
         self.transformed_df['count'] = self.transformed_df['count'] / max_count
+        self.transformed_df.sort_values('count', ascending=False, inplace=True)
+        self.transformed_df = self.transformed_df[['count','category_name']]
 
-    # TODO: rough location, depends on what people are doing
+    def attended_university(self):
+        uni = []
+        abbrev = ['ucl', 'lse', 'soas', 'uea', 'uwe']
+        for row in range(0, len(df)):
+            num_entries = len(df['education_history'][row])
+            uni_attend = False
+            if num_entries > 0:
+                for entry in range(0, num_entries):
+                    try:
+                        name = df['education_history'][row][entry]['institution_name'].lower()
+                        if fuzz.partial_ratio('university', name) > 80 or name in abbrev:
+                            uni_attend = True
+                            uni.append('University')
+                            break
+
+                    except KeyError:
+                        pass
+
+            if uni_attend == False:
+                uni.append('No University')
+
+        freq_df = pd.DataFrame(pd.Series(uni).value_counts()).reset_index()
+        freq_df.columns = ['status','count']
+        print(freq_df)
+        self.transformed_df = freq_df
+
+    # TODO: complete university attended
+    def university_attended(self):
+        pass
+
+
+    # TODO: rough location, this might be done using some web app though
     def location(self):
+
+        pass
+
+    # TODO: complete some simple code for languages
+    def languages(self):
+
 
         pass
 
@@ -107,22 +155,20 @@ class ExploratoryDataAnalysis():
         plt.show()
 
     def generate_bar_chart(self):
-        ax = sns.barplot(x='count',y='category_name',data=self.transformed_df)
+        [first_column_name, second_column_name] = self.transformed_df.columns
+        ax = sns.barplot(x=first_column_name,y=second_column_name,data=self.transformed_df)
         return ax
 
-    # TODO: adjust normalization for the Unknown
     def generate_industry_comparison_bar_chart(self):
 
         # preparing total industry
         total_industry_df = read_general_csv('data/manual/website_category_num.csv')
-        max_count = max(total_industry_df['count'])
-        total_industry_df['count'] = total_industry_df['count'] / max_count
+        max_count_1 = max(total_industry_df['count'])
+        total_industry_df['count'] = total_industry_df['count'] / max_count_1
         total_industry_df['type'] = 'website'
 
         # prepare transformed data
         self.transformed_df['type'] = 'cv'
-        self.transformed_df = self.transformed_df[self.transformed_df['category_name'] != 'Unknown']
-        self.transformed_df.sort_values('count',ascending=False,inplace=True)
 
         # join
         total_df = pd.concat([self.transformed_df,total_industry_df],axis=0)
@@ -139,10 +185,11 @@ if __name__ == '__main__':
     # transform data
     graph = ExploratoryDataAnalysis(df)
     graph.most_recent_job_category()
+    ax = graph.generate_bar_chart()
     # print(graph.transformed_df.head(30))
     #
-    ax = graph.generate_industry_comparison_bar_chart()
-
+    # ax = graph.generate_industry_comparison_bar_chart()
+    #
     plt.show(ax)
 
 

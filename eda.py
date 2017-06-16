@@ -96,9 +96,12 @@ class ExploratoryDataAnalysis():
         self.transformed_df.sort_values('count', ascending=False, inplace=True)
         self.transformed_df = self.transformed_df[['count','category_name']]
 
+    # TODO: add qualification to this
+    # string containing: ['master','bachelor','ba','ma','msc','bsc']
     def attended_university(self):
         uni = []
         abbrev = ['ucl', 'lse', 'soas', 'uea', 'uwe']
+        qual_list = ['master','bachelor','ba','ma','msc','bsc']
         for row in range(0, len(df)):
             num_entries = len(df['education_history'][row])
             uni_attend = False
@@ -106,7 +109,9 @@ class ExploratoryDataAnalysis():
                 for entry in range(0, num_entries):
                     try:
                         name = df['education_history'][row][entry]['institution_name'].lower()
-                        if fuzz.partial_ratio('university', name) > 80 or name in abbrev:
+                        qual = df['education_history'][row][entry]['qualification_type'].lower()
+                        if fuzz.partial_ratio('university', name) > 80 or name in abbrev or \
+                                any(substring in qual for substring in qual_list):
                             uni_attend = True
                             uni.append('University')
                             break
@@ -122,9 +127,7 @@ class ExploratoryDataAnalysis():
         print(freq_df)
         self.transformed_df = freq_df
 
-    # TODO: complete university attended
-    def university_attended(self):
-        pass
+    # TODO: add age vs university
 
 
     # TODO: rough location, this might be done using some web app though
@@ -132,11 +135,7 @@ class ExploratoryDataAnalysis():
 
         pass
 
-    # TODO: complete some simple code for languages
-    def languages(self):
-
-
-        pass
+    # TODO: add wordcloud of skills
 
     ##########
     # visualization methods
@@ -184,7 +183,7 @@ if __name__ == '__main__':
 
     # transform data
     graph = ExploratoryDataAnalysis(df)
-    graph.most_recent_job_category()
+    graph.attended_university()
     ax = graph.generate_bar_chart()
     # print(graph.transformed_df.head(30))
     #

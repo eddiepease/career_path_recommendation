@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-# import matplotlib
-# matplotlib.use('QT4Agg')
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pickle
@@ -32,6 +32,7 @@ class ExploratoryDataAnalysis():
 
 
     def most_recent_job_title(self, job_num=0):
+        print('Start most_recent_job_title method...')
 
         # job_num defaults to most recent job (=0), 2nd most recent job - job_num=1 etc..
 
@@ -70,10 +71,11 @@ class ExploratoryDataAnalysis():
 
         # temp saving
         freq_df = pd.Series(self.transformed_df['pt']).value_counts().to_dict()
-        pickle.dump(freq_df, open("test_job_freq.pkl","wb"))
+        pickle.dump(freq_df, open("job_freq.pkl","wb"))
 
 
     def most_recent_job_category(self):
+        print('Start most_recent_job_category method...')
 
         # generate job title category
         ontology = read_ontology_data('title-category')
@@ -85,7 +87,7 @@ class ExploratoryDataAnalysis():
         right_df.drop('prob', axis=1, inplace=True)
 
         # load in normalized job categories + join
-        left_dict = pickle.load(open("test_job_freq.pkl", "rb"))
+        left_dict = pickle.load(open("job_freq.pkl", "rb"))
         left_df = pd.DataFrame(list(left_dict.items()),columns=['title','count'])
         merge_df = pd.merge(left_df, right_df, how='left', on='title')
 
@@ -97,9 +99,10 @@ class ExploratoryDataAnalysis():
         self.transformed_df.sort_values('count', ascending=False, inplace=True)
         self.transformed_df = self.transformed_df[['count','category_name']]
 
-    # TODO: add qualification to this
-    # string containing: ['master','bachelor','ba','ma','msc','bsc']
+    # TODO: check whether the qualification is working as expected
+    # TODO: find a better way of displaying this information visualy
     def attended_university(self):
+        print('Start attended_university method..')
         uni = []
         abbrev = ['ucl', 'lse', 'soas', 'uea', 'uwe']
         qual_list = ['master','bachelor','ba','ma','msc','bsc']
@@ -131,10 +134,10 @@ class ExploratoryDataAnalysis():
     # TODO: add age vs university
 
 
-    # TODO: rough location, this might be done using some web app though
     # note that this method saves a html file in figures folder
     # you need to screenshot locally to get a png
     def location(self):
+        print('Start location method..')
 
         # load postcodes ontology + merge with postcodes in the CVs
         post_ontology = read_general_csv('data/ontology/ukpostcodes.csv')
@@ -155,8 +158,6 @@ class ExploratoryDataAnalysis():
         gmap.heatmap(lats, lngs)
         gmap.draw("figures/cv_map.html")
 
-
-
     # TODO: add wordcloud of skills
 
     ##########
@@ -168,16 +169,18 @@ class ExploratoryDataAnalysis():
         return ax
 
     def generate_word_cloud(self):
-        job_freq_dict = pickle.load(open("test_job_freq.pkl","rb"))
+        job_freq_dict = pickle.load(open("job_freq.pkl","rb"))
         wordcloud = WordCloud().generate_from_frequencies(job_freq_dict)
 
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
-        plt.show()
+        plt.savefig('figures/whole_word_cloud.png')
 
     def generate_bar_chart(self):
         [first_column_name, second_column_name] = self.transformed_df.columns
         ax = sns.barplot(x=first_column_name,y=second_column_name,data=self.transformed_df)
+        # plt.savefig('figures/whole_university_attended.png')
+
         return ax
 
     def generate_industry_comparison_bar_chart(self):
@@ -205,7 +208,13 @@ if __name__ == '__main__':
 
     # transform data
     eda = ExploratoryDataAnalysis(df)
-    eda.location()
+    # eda.location()
+    # eda.most_recent_job_title()
+    eda.attended_university()
+    eda.generate_bar_chart()
+
+    # eda.most_recent_job_title()
+
     # graph.attended_university()
     # ax = graph.generate_bar_chart()
     # print(graph.transformed_df.head(30))

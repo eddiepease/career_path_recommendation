@@ -136,8 +136,26 @@ class ExploratoryDataAnalysis():
     # you need to screenshot locally to get a png
     def location(self):
 
+        # load postcodes ontology + merge with postcodes in the CVs
+        post_ontology = read_general_csv('data/ontology/ukpostcodes.csv')
+        left_df = df['postal_code'].dropna()
+        left_df = pd.DataFrame(left_df.map(lambda x: str(x).replace(' ', '')))
+        postcode_df = left_df.merge(post_ontology, how='left', left_on='postal_code', right_on='postcode')
+        postcode_df = postcode_df[['postal_code', 'latitude', 'longitude']]
+        postcode_df = postcode_df.dropna()
 
-        pass
+        # prepare for plot
+        gmap = gmplot.GoogleMapPlotter.from_geocode('United Kingdom')
+
+        lats = list(postcode_df['latitude'])
+        lngs = list(postcode_df['longitude'])
+
+        # create + save a heatmap
+        # create a heatmap!
+        gmap.heatmap(lats, lngs)
+        gmap.draw("figures/cv_map.html")
+
+
 
     # TODO: add wordcloud of skills
 
@@ -186,14 +204,15 @@ if __name__ == '__main__':
     df = read_json_data()
 
     # transform data
-    graph = ExploratoryDataAnalysis(df)
-    graph.attended_university()
-    ax = graph.generate_bar_chart()
+    eda = ExploratoryDataAnalysis(df)
+    eda.location()
+    # graph.attended_university()
+    # ax = graph.generate_bar_chart()
     # print(graph.transformed_df.head(30))
     #
     # ax = graph.generate_industry_comparison_bar_chart()
     #
-    plt.show(ax)
+    # plt.show(ax)
 
 
     # graph.most_recent_job_title()

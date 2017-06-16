@@ -7,6 +7,7 @@ import seaborn as sns
 import pickle
 from wordcloud import WordCloud
 from fuzzywuzzy import fuzz
+import gmplot
 
 from read_data import read_json_data,read_ontology_data,read_general_csv
 from job_title_normalizer.ad_parsing import JobTitleNormalizer
@@ -23,11 +24,11 @@ class ExploratoryDataAnalysis():
 
     def work_experience_months(self):
         df = self.df['total_months_work_exp'].astype('float').dropna()
-        self.transformed_df = df[df < self.years_bound * 12]
+        self.transformed_df = self.df[self.df < self.years_bound * 12]
 
     def work_experience_years(self):
         df = self.df['total_months_work_exp'].astype('float').dropna()
-        self.transformed_df = df[df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
+        self.transformed_df = self.df[self.df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
 
 
     def most_recent_job_title(self, job_num=0):
@@ -50,12 +51,12 @@ class ExploratoryDataAnalysis():
                                                   token_sub, fnoun_set)
 
         # loop through df
-        for i in range(0, len(df)):
+        for i in range(0, len(self.df)):
             # print(i)
             # print(df['employment_history'][i])
             if len(df['employment_history'][i]) > 0:
                 try:
-                    raw_title = df['employment_history'][i][job_num]['raw_job_title']
+                    raw_title = self.df['employment_history'][i][job_num]['raw_job_title']
                     normalized_title = job_title_normalizer.process(raw_title)['title_norm']
                     most_recent_job_title.append(normalized_title)
                 except KeyError:
@@ -103,13 +104,13 @@ class ExploratoryDataAnalysis():
         abbrev = ['ucl', 'lse', 'soas', 'uea', 'uwe']
         qual_list = ['master','bachelor','ba','ma','msc','bsc']
         for row in range(0, len(df)):
-            num_entries = len(df['education_history'][row])
+            num_entries = len(self.df['education_history'][row])
             uni_attend = False
             if num_entries > 0:
                 for entry in range(0, num_entries):
                     try:
-                        name = df['education_history'][row][entry]['institution_name'].lower()
-                        qual = df['education_history'][row][entry]['qualification_type'].lower()
+                        name = self.df['education_history'][row][entry]['institution_name'].lower()
+                        qual = self.df['education_history'][row][entry]['qualification_type'].lower()
                         if fuzz.partial_ratio('university', name) > 80 or name in abbrev or \
                                 any(substring in qual for substring in qual_list):
                             uni_attend = True
@@ -124,14 +125,17 @@ class ExploratoryDataAnalysis():
 
         freq_df = pd.DataFrame(pd.Series(uni).value_counts()).reset_index()
         freq_df.columns = ['status','count']
-        print(freq_df)
+        # print(freq_df)
         self.transformed_df = freq_df
 
     # TODO: add age vs university
 
 
     # TODO: rough location, this might be done using some web app though
+    # note that this method saves a html file in figures folder
+    # you need to screenshot locally to get a png
     def location(self):
+
 
         pass
 

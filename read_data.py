@@ -3,6 +3,7 @@ import glob
 import time
 import json
 import pandas as pd
+import pickle
 
 
 # TODO: any other preprocessing required?
@@ -25,15 +26,17 @@ def read_json_data():
 
     # define variables
     data = []
-    folder = 'data/cvs_v2/'
-    files = os.listdir(folder)[1:2] # TODO: change this
+    folder = 'data/cvs/'
+    files = os.listdir(folder)
 
     # loop through files
     for file in files:
         path = folder + file
+        print(file)
         with open(path) as f:
             for line in f:
                 data.append(json.loads(line))
+
 
     df = preprocessing(pd.DataFrame(data))
 
@@ -60,13 +63,7 @@ if __name__ == "__main__":
     # stuff
     df = read_json_data()
 
-    print(df.head(10))
-    print(df.columns)
-
-    df_test = preprocessing(df)
-    # print(len(df_test))
-    # # print(df_test.head(10))
-    # # print(df_test.tail(10))
+    pickle.dump(df, open('data/all_csv.pkl','wb'))
 
 
 

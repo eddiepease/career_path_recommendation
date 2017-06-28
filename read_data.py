@@ -2,6 +2,7 @@ import os
 import glob
 import time
 import json
+import numpy as np
 import pandas as pd
 import pickle
 
@@ -53,6 +54,15 @@ def read_ontology_data(ontology_name):
 def read_general_csv(file_path):
     df = pd.read_csv(file_path)
     return df
+
+def read_embeddings_json(file_path):
+    skill_embeddings = {}
+    with open(file_path) as f:
+        for line in f:
+            emb = json.loads(line)
+            skill_embeddings[emb["word"]] = np.asarray(emb["vector"]["values"], dtype=float)
+            
+    return skill_embeddings
 
 
 if __name__ == "__main__":

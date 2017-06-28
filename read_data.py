@@ -23,12 +23,11 @@ def preprocessing(df):
     return df_result
 
 
-def read_json_data():
+def read_json_data(folder):
 
     # define variables
     data = []
-    folder = 'data/cvs/'
-    files = os.listdir(folder)
+    files = os.listdir(folder)[:1]
 
     # loop through files
     for file in files:
@@ -71,17 +70,19 @@ if __name__ == "__main__":
     t0 = time.time()
 
     # stuff
-    df = read_json_data()
+    # df = read_json_data('data/cvs/')
+    files = os.listdir('data/cvs/')
+    print(len(files))
 
-    pickle.dump(df, open('data/all_csv.pkl','wb'))
-
-
-
-
-    # end time
-    t1 = time.time()
-
-    duration = round(t1 - t0, 2)
-    print('Duration is', duration, 'seconds')
+    # pickle.dump(df, open('data/all_csv.pkl','wb'))
+    #
+    #
+    #
+    #
+    # # end time
+    # t1 = time.time()
+    #
+    # duration = round(t1 - t0, 2)
+    # print('Duration is', duration, 'seconds')
 
 

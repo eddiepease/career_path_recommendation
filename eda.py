@@ -14,24 +14,28 @@ from job_title_normalizer.ad_parsing import JobTitleNormalizer
 
 class ExploratoryDataAnalysis():
 
-    def __init__(self, df):
+    def __init__(self, df, job_title_location):
         self.df = df
         self.years_bound = 60
+        self.job_title_location = job_title_location
 
     ###############
     # transformation methods
     ###############
 
     def work_experience_months(self):
-        df = self.df['total_months_work_exp'].astype('float').dropna()
-        self.transformed_df = self.df[self.df < self.years_bound * 12]
+        temp_df = self.df['total_months_work_exp'].astype('float').dropna()
+        self.transformed_df = temp_df[temp_df < self.years_bound * 12]
 
     def work_experience_years(self):
-        df = self.df['total_months_work_exp'].astype('float').dropna()
-        self.transformed_df = self.df[self.df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
+        temp_df = self.df['total_months_work_exp'].astype('float').dropna()
+        self.transformed_df = temp_df[temp_df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
+
+    def number_of_roles(self):
+        pass
 
 
-    def most_recent_job_title(self, job_num=0):
+    def most_recent_job_title(self, file_name, job_num=0):
         print('Start most_recent_job_title method...')
 
         # job_num defaults to most recent job (=0), 2nd most recent job - job_num=1 etc..
@@ -71,10 +75,10 @@ class ExploratoryDataAnalysis():
 
         # temp saving
         freq_df = pd.Series(self.transformed_df['pt']).value_counts().to_dict()
-        pickle.dump(freq_df, open("job_freq.pkl","wb"))
+        pickle.dump(freq_df, open(self.job_title_location + file_name + ".pkl","wb"))
 
 
-    def most_recent_job_category(self):
+    def most_recent_job_category(self, job_title_filename):
         print('Start most_recent_job_category method...')
 
         # generate job title category
@@ -87,7 +91,7 @@ class ExploratoryDataAnalysis():
         right_df.drop('prob', axis=1, inplace=True)
 
         # load in normalized job categories + join
-        left_dict = pickle.load(open("job_freq.pkl", "rb"))
+        left_dict = pickle.load(open(self.job_title_location + job_title_filename + ".pkl", "rb"))
         left_df = pd.DataFrame(list(left_dict.items()),columns=['title','count'])
         merge_df = pd.merge(left_df, right_df, how='left', on='title')
 
@@ -136,8 +140,10 @@ class ExploratoryDataAnalysis():
 
     # note that this method saves a html file in figures folder
     # you need to screenshot locally to get a png
-    def location(self):
+    def location(self,file_location):
         print('Start location method..')
+
+        assert ('.html' not in file_location), "Must save the map as html file!"
 
         # load postcodes ontology + merge with postcodes in the CVs
         post_ontology = read_general_csv('data/ontology/ukpostcodes.csv')
@@ -154,9 +160,8 @@ class ExploratoryDataAnalysis():
         lngs = list(postcode_df['longitude'])
 
         # create + save a heatmap
-        # create a heatmap!
         gmap.heatmap(lats, lngs)
-        gmap.draw("figures/cv_map.html")
+        gmap.draw(file_location)
 
     # TODO: add wordcloud of skills
 
@@ -168,6 +173,7 @@ class ExploratoryDataAnalysis():
         ax = sns.distplot(self.transformed_df)
         return ax
 
+    # TODO: change this to return ax
     def generate_word_cloud(self):
         job_freq_dict = pickle.load(open("job_freq.pkl","rb"))
         wordcloud = WordCloud().generate_from_frequencies(job_freq_dict)

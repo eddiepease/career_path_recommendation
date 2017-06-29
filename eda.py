@@ -31,6 +31,7 @@ class ExploratoryDataAnalysis():
         temp_df = self.df['total_months_work_exp'].astype('float').dropna()
         self.transformed_df = temp_df[temp_df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
 
+    # TODO: add this
     def number_of_roles(self):
         pass
 
@@ -59,7 +60,7 @@ class ExploratoryDataAnalysis():
         for i in range(0, len(self.df)):
             # print(i)
             # print(df['employment_history'][i])
-            if len(df['employment_history'][i]) > 0:
+            if len(self.df['employment_history'][i]) > 0:
                 try:
                     raw_title = self.df['employment_history'][i][job_num]['raw_job_title']
                     normalized_title = job_title_normalizer.process(raw_title)['title_norm']
@@ -110,7 +111,7 @@ class ExploratoryDataAnalysis():
         uni = []
         abbrev = ['ucl', 'lse', 'soas', 'uea', 'uwe']
         qual_list = ['master','bachelor','ba','ma','msc','bsc']
-        for row in range(0, len(df)):
+        for row in range(0, len(self.df)):
             num_entries = len(self.df['education_history'][row])
             uni_attend = False
             if num_entries > 0:
@@ -143,11 +144,11 @@ class ExploratoryDataAnalysis():
     def location(self,file_location):
         print('Start location method..')
 
-        assert ('.html' not in file_location), "Must save the map as html file!"
+        assert ('.html' in file_location), "Must save the map as html file!"
 
         # load postcodes ontology + merge with postcodes in the CVs
         post_ontology = read_general_csv('data/ontology/ukpostcodes.csv')
-        left_df = df['postal_code'].dropna()
+        left_df = self.df['postal_code'].dropna()
         left_df = pd.DataFrame(left_df.map(lambda x: str(x).replace(' ', '')))
         postcode_df = left_df.merge(post_ontology, how='left', left_on='postal_code', right_on='postcode')
         postcode_df = postcode_df[['postal_code', 'latitude', 'longitude']]
@@ -169,25 +170,23 @@ class ExploratoryDataAnalysis():
     # visualization methods
     ##########
 
-    def generate_histogram(self):
-        ax = sns.distplot(self.transformed_df)
-        return ax
+    def generate_histogram(self,xlabel_name,axis=None):
+        sns.distplot(self.transformed_df,ax=axis).set(xlabel=xlabel_name)
 
-    # TODO: change this to return ax
-    def generate_word_cloud(self):
+    def generate_word_cloud(self,file,title,save_location):
         job_freq_dict = pickle.load(open("job_freq.pkl","rb"))
         wordcloud = WordCloud().generate_from_frequencies(job_freq_dict)
 
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
-        plt.savefig('figures/whole_word_cloud.png')
+        plt.title(title)
+        plt.savefig(save_location)
 
-    def generate_bar_chart(self):
+    def generate_bar_chart(self,xlabel_name, axis=None):
         [first_column_name, second_column_name] = self.transformed_df.columns
-        ax = sns.barplot(x=first_column_name,y=second_column_name,data=self.transformed_df)
+        sns.barplot(x=first_column_name,y=second_column_name,data=self.transformed_df,ax=axis)\
+            .set(xlabel=xlabel_name)
         # plt.savefig('figures/whole_university_attended.png')
-
-        return ax
 
     def generate_industry_comparison_bar_chart(self):
 
@@ -210,45 +209,10 @@ class ExploratoryDataAnalysis():
 if __name__ == '__main__':
 
     # read data
-    df = read_json_data()
+    df = read_json_data(folder='data/cvs/')
 
     # transform data
-    eda = ExploratoryDataAnalysis(df)
-    # eda.location()
-    # eda.most_recent_job_title()
-    eda.attended_university()
-    eda.generate_bar_chart()
-
-    # eda.most_recent_job_title()
-
-    # graph.attended_university()
-    # ax = graph.generate_bar_chart()
-    # print(graph.transformed_df.head(30))
-    #
-    # ax = graph.generate_industry_comparison_bar_chart()
-    #
-    # plt.show(ax)
-
-
-    # graph.most_recent_job_title()
-    # graph.generate_word_cloud()
-    # graph.most_recent_job_category()
-
-
-    # print('Number of rows: ',len(df))
-    # print('Number of NaNs', graph.transformed_df['pt'].isnull().sum())
-    # print(graph.transformed_df.head(100))
-    # print(len(graph.transformed_df))
-
-
-
-
-    # # plot graph
-    # plt.show(ax)
-
-    # word cloud test
-
-
-
-
-
+    eda = ExploratoryDataAnalysis(df,job_title_location='')
+    eda.work_experience_years()
+    eda.generate_histogram()
+    plt.savefig('test.png')

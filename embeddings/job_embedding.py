@@ -4,42 +4,32 @@ from sklearn.manifold import TSNE
 
 from read_data import read_ontology_data,read_embeddings_json
 
-# TODO: complete this
-def convert_skills_profile_to_dict():
-    pass
-
-# TODO: alter this to take account of the function above when completed
+# TODO: test this
 def create_job_embedding(embedding_size):
 
     # read in skills profiles + order + normalize TD-IDF scores
-    skills_profile_df = read_ontology_data('skill-profiles')
-    skills_profile_df.sort_values(['title', 'weight'], ascending=[False, False], inplace=True)
-    skills_profile_df.reset_index(drop=True, inplace=True)
-    skills_profile_df = skills_profile_df.assign(
-        normalized=skills_profile_df['weight'].div(skills_profile_df.groupby('title')['weight'].transform('sum')))
+    skill_profile_dict = read_ontology_data('skill-profiles')
 
     # read in skills embedding
     file_name = 'data/ontology/skill-word2vec/data/skill_embeddings.json'
     skill_embeddings_dict = read_embeddings_json(file_name)
 
-    # average skills to create job embedding
-    unique_job_titles = list(skills_profile_df['title'].unique())
-    data = np.empty(shape=(len(unique_job_titles), embedding_size), dtype=np.float32)
+    # initialize numpy array
+    data = np.empty(shape=(len(skill_profile_dict), embedding_size), dtype=np.float32)
 
     # merge these together to create a numpy array
-    for i, job in enumerate(unique_job_titles):
+    for i,value in enumerate(skill_profile_dict.values()):
         print(i)
         job_array = np.zeros(shape=(1, embedding_size))
-        job_df = skills_profile_df[skills_profile_df['title'] == job]
-        skills = list(job_df['skill'])
-        norm_weights = list(job_df['normalized'])
+        skills = value[0]
+        norm_weights = value[2]
 
         for j, skill in enumerate(skills):
             job_array = job_array + skill_embeddings_dict[skill] * norm_weights[j]
 
         data[i, :] = job_array
 
-    return data, unique_job_titles
+    return data, skill_profile_dict.keys()
 
 
 def plot_with_labels(low_dim_embs, labels, filename):
@@ -73,7 +63,7 @@ if __name__ == "__main__":
     # TODO: is there a different way to generate the embeddings
 
     # create job embedding
-    job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same as skill embedding
+    job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same size as skill embedding
 
     #plot using TSNE
     evaluate_with_tsne(job_embedding,num_to_plot=800, input_labels=job_titles, filename='job_tsne.png')

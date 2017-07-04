@@ -48,11 +48,16 @@ def read_ontology_data(ontology_name, file_type='csv'):
 
     if file_type == 'csv':
         for file in allFiles:
-            df = pd.read_csv(file)
+            output = pd.read_csv(file)
     elif file_type == 'pkl':
         for file in allFiles:
-            df = pickle.load( open( file, "rb" ) )
-    return df
+            output = pickle.load( open( file, "rb" ) )
+    else:
+        assert (file_type == 'csv' or file_type == 'pkl'), "File type must be either CSV or PKL!"
+
+    assert (len(allFiles) > 0), "allFiles list can't be of length zero!"
+
+    return output
 
 def read_general_csv(file_path):
     df = pd.read_csv(file_path)

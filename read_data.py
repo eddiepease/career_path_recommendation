@@ -42,12 +42,16 @@ def read_json_data(folder):
 
     return df
 
-def read_ontology_data(ontology_name):
+def read_ontology_data(ontology_name, file_type='csv'):
     folder_name = 'data/ontology/' + ontology_name
-    allFiles = glob.glob(folder_name + "/*.csv")
+    allFiles = glob.glob(folder_name + "/*." + file_type)
 
-    for file in allFiles:
-        df = pd.read_csv(file)
+    if file_type == 'csv':
+        for file in allFiles:
+            df = pd.read_csv(file)
+    elif file_type == 'pkl':
+        for file in allFiles:
+            df = pickle.load( open( file, "rb" ) )
     return df
 
 def read_general_csv(file_path):
@@ -63,6 +67,30 @@ def read_embeddings_json(file_path):
             
     return skill_embeddings
 
+# function to convert the skills profile csv to a dict
+def skills_profile_to_dict(save_location):
+    # define dict
+    skills_profile_dict = {}
+    # {job title: [[skills],[TF-IDF weight],[normalization]] sorted by weight highest to lowest
+
+    # read in skills profiles + order + normalize TD-IDF scores
+    skills_profile_df = read_ontology_data('skill-profiles')
+    skills_profile_df.sort_values(['title', 'weight'], ascending=[False, False], inplace=True)
+    skills_profile_df.reset_index(drop=True, inplace=True)
+    skills_profile_df = skills_profile_df.assign(
+        normalized=skills_profile_df['weight'].div(skills_profile_df.groupby('title')['weight'].transform('sum')))
+
+    unique_job_titles = list(np.sort(skills_profile_df['title'].unique()))
+
+    for i,job in enumerate(unique_job_titles):
+        print(i)
+        temp_df = skills_profile_df[skills_profile_df['title'] == job]
+        skills_profile_dict[job] = [list(temp_df['skill']), list(temp_df['weight']), list(temp_df['normalized'])]
+
+    # save dictionary
+    pickle.dump(skills_profile_dict, open(save_location, 'wb'))
+
+
 
 if __name__ == "__main__":
 
@@ -71,8 +99,9 @@ if __name__ == "__main__":
 
     # stuff
     # df = read_json_data('data/cvs/')
-    files = os.listdir('data/cvs/')
-    print(len(files))
+    # skills_profile_to_dict(save_location='data/ontology/skill-profiles/skill_profile_dict.pkl')
+    test_dict = read_ontology_data('skill-profiles', file_type='pkl')
+    # print(test_dict)
 
     # pickle.dump(df, open('data/all_csv.pkl','wb'))
     #

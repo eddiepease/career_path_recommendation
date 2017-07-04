@@ -12,6 +12,36 @@ import gmplot
 from read_data import read_json_data,read_ontology_data,read_general_csv
 from job_title_normalizer.ad_parsing import JobTitleNormalizer
 
+class CVJobNormalizer():
+    def __init__(self):
+
+        # read in necessary files
+        self.fnoun_plural = pickle.load(open("job_title_normalizer/data/fnoun_plural_dict.pkl", "rb"), encoding='latin1')
+        self.fnoun_set = pickle.load(open("job_title_normalizer/data/fnoun_set.pkl", "rb"), encoding='latin1')
+        self.spellchecker = pickle.load(open("job_title_normalizer/data/spellchecker_dict.pkl", "rb"), encoding='latin1')
+        self.stopwords = pickle.load(open("job_title_normalizer/data/stopwords.pkl", "rb"), encoding='latin1')
+        self.title = pickle.load(open("job_title_normalizer/data/title_dict.pkl", "rb"), encoding='latin1')
+        self.token_sub = pickle.load(open("job_title_normalizer/data/token_sub_dict.pkl", "rb"), encoding='latin1')
+        self.us_uk_spellchecker = pickle.load(open("job_title_normalizer/data/us_uk_spellchecker_dict.pkl", "rb"),
+                                         encoding='latin1')
+
+        # normalizer
+        self.job_title_normalizer = JobTitleNormalizer(self.stopwords, self.us_uk_spellchecker, self.spellchecker,
+                                                       self.fnoun_plural, self.title, self.token_sub, self.fnoun_set)
+
+    def normalized_job(self, df, n_row, job_num=0):
+        if len(df['employment_history'][n_row]) > 0:
+            try:
+                raw_title = df['employment_history'][n_row][job_num]['raw_job_title']
+                normalized_title = self.job_title_normalizer.process(raw_title)['title_norm']
+                return normalized_title
+            except KeyError:
+                pass
+            except IndexError:
+                pass
+
+
+# class used for any exploratory data analysis - both transformation and visualization methods
 class ExploratoryDataAnalysis():
 
     def __init__(self, df, job_title_location):
@@ -42,33 +72,11 @@ class ExploratoryDataAnalysis():
         # job_num defaults to most recent job (=0), 2nd most recent job - job_num=1 etc..
 
         most_recent_job_title = []
-
-        # set up the normalizer
-        fnoun_plural = pickle.load(open("job_title_normalizer/data/fnoun_plural_dict.pkl", "rb"), encoding='latin1')
-        fnoun_set = pickle.load(open("job_title_normalizer/data/fnoun_set.pkl", "rb"), encoding='latin1')
-        spellchecker = pickle.load(open("job_title_normalizer/data/spellchecker_dict.pkl", "rb"), encoding='latin1')
-        stopwords = pickle.load(open("job_title_normalizer/data/stopwords.pkl", "rb"), encoding='latin1')
-        title = pickle.load(open("job_title_normalizer/data/title_dict.pkl", "rb"), encoding='latin1')
-        token_sub = pickle.load(open("job_title_normalizer/data/token_sub_dict.pkl", "rb"), encoding='latin1')
-        us_uk_spellchecker = pickle.load(open("job_title_normalizer/data/us_uk_spellchecker_dict.pkl", "rb"),
-                                         encoding='latin1')
-
-        job_title_normalizer = JobTitleNormalizer(stopwords, us_uk_spellchecker, spellchecker, fnoun_plural, title,
-                                                  token_sub, fnoun_set)
+        cv_job_normalizer = CVJobNormalizer()
 
         # loop through df
         for i in range(0, len(self.df)):
-            # print(i)
-            # print(df['employment_history'][i])
-            if len(self.df['employment_history'][i]) > 0:
-                try:
-                    raw_title = self.df['employment_history'][i][job_num]['raw_job_title']
-                    normalized_title = job_title_normalizer.process(raw_title)['title_norm']
-                    most_recent_job_title.append(normalized_title)
-                except KeyError:
-                    pass
-                except IndexError:
-                    pass
+            most_recent_job_title.append(cv_job_normalizer.normalized_job(df=self.df, n_row=i,job_num=job_num))
 
         # cross reference with ontology
         print('reference against ontology...')

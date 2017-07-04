@@ -4,11 +4,11 @@ from sklearn.manifold import TSNE
 
 from read_data import read_ontology_data,read_embeddings_json
 
-# TODO: test this
+
 def create_job_embedding(embedding_size):
 
     # read in skills profiles + order + normalize TD-IDF scores
-    skill_profile_dict = read_ontology_data('skill-profiles')
+    skill_profile_dict = read_ontology_data('skill-profiles',file_type='pkl')
 
     # read in skills embedding
     file_name = 'data/ontology/skill-word2vec/data/skill_embeddings.json'
@@ -16,20 +16,21 @@ def create_job_embedding(embedding_size):
 
     # initialize numpy array
     data = np.empty(shape=(len(skill_profile_dict), embedding_size), dtype=np.float32)
+    ordered_jobs = list(np.sort(list(skill_profile_dict.keys())))
 
     # merge these together to create a numpy array
-    for i,value in enumerate(skill_profile_dict.values()):
+    for i,key in enumerate(ordered_jobs):
         print(i)
         job_array = np.zeros(shape=(1, embedding_size))
-        skills = value[0]
-        norm_weights = value[2]
+        skills = skill_profile_dict[key][0]
+        norm_weights = skill_profile_dict[key][2]
 
         for j, skill in enumerate(skills):
             job_array = job_array + skill_embeddings_dict[skill] * norm_weights[j]
 
         data[i, :] = job_array
 
-    return data, skill_profile_dict.keys()
+    return data, ordered_jobs
 
 
 def plot_with_labels(low_dim_embs, labels, filename):
@@ -66,5 +67,5 @@ if __name__ == "__main__":
     job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same size as skill embedding
 
     #plot using TSNE
-    evaluate_with_tsne(job_embedding,num_to_plot=800, input_labels=job_titles, filename='job_tsne.png')
+    evaluate_with_tsne(job_embedding,num_to_plot=800, input_labels=job_titles, filename='job_tsne_2.png')
 

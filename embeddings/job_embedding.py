@@ -6,6 +6,7 @@ from read_data import read_ontology_data,read_embeddings_json
 
 
 def create_job_embedding(embedding_size):
+    print('calculating job embeddings...')
 
     # read in skills profiles + order + normalize TD-IDF scores
     skill_profile_dict = read_ontology_data('skill-profiles',file_type='pkl')
@@ -20,7 +21,7 @@ def create_job_embedding(embedding_size):
 
     # merge these together to create a numpy array
     for i,key in enumerate(ordered_jobs):
-        print(i)
+        # print(i)
         job_array = np.zeros(shape=(1, embedding_size))
         skills = skill_profile_dict[key][0]
         norm_weights = skill_profile_dict[key][2]

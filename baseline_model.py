@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.preprocessing import scale
 from collections import defaultdict,Counter
 
 from read_data import read_ontology_data
@@ -45,9 +47,7 @@ class BaselineModel():
         # read in pre-requisites
         skill_profile_dict, unique_skills, job_dict, reverse_job_dict = self.prepare_feature_generation()
 
-        # create dict
-        bos_dict = dict.fromkeys(unique_skills, 0)
-
+        # define various inputs
         v = DictVectorizer(sparse=True)
         features = []
         labels = []
@@ -63,19 +63,19 @@ class BaselineModel():
             # if no job_title in CV or job title is not in skills profile for either position
             if normalized_title_feat in skill_profile_dict and normalized_title_label in skill_profile_dict:
 
-                temp_dict = bos_dict
+                bos_dict = dict.fromkeys(unique_skills, 0)
                 skills = skill_profile_dict[normalized_title_feat][0]
                 weights = skill_profile_dict[normalized_title_feat][1]
-                for i, skill in enumerate(skills):
+                for j, skill in enumerate(skills):
                     if tf_idf == True:
-                        temp_dict[skill] += weights[i]
+                        bos_dict[skill] += weights[j]
                     else:
-                        temp_dict[skill] += 1
+                        bos_dict[skill] += 1
 
-                if i % 1000 == 0:
-                    print(temp_dict.keys()) # testing
+                # if i % 1000 == 0:
+                #     print(list(temp_dict.keys())[:10]) # testing
 
-                features.append(temp_dict)
+                features.append(bos_dict)
 
                 # create labels
                 labels.append(job_dict[normalized_title_label])
@@ -189,6 +189,8 @@ class BaselineModel():
             clf = GaussianNB()
         elif model_type == 'svm':
             clf = SVC(probability=True)
+        elif model_type == 'lr':
+            clf = LogisticRegression()
 
         clf.fit(self.X_train,self.y_train)
         t1 = time.time()
@@ -205,14 +207,32 @@ if __name__ == "__main__":
 
     t0 = time.time()
     # create train/test set
-    train, test = create_train_test_set_stratified(n_files=1)
+    train, test = create_train_test_set_stratified(n_files=15,threshold=10)
 
     # print(train.shape)
     # print(test.shape)
 
     # form features
-    folder = 'processed_1_bos_unweighted'
+    folder = 'processed_15_embed_unweighted_10thres'
     model = BaselineModel(train,test)
-    # model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
-    mpr = model.train_and_eval_model(model_type='svm', save_name=folder)
+    model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
+    mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)
     print('MPR: ', mpr)
+    #
+    # # test the bag of skills
+    # X_train = pickle.load(open('data/processed_1_bos_weighted/' + "X_train.pkl", "rb"))
+    #
+    # test_list = list(np.sum(X_train,axis=0))
+    # print(test_list)
+    # # under_50 = [i for i in test_list if i < 100]
+    # # print(len(under_50))
+    # plt.hist(test_list,bins=100)
+    # plt.savefig('tf_idf_test_hist_3.png')
+
+    # 0: 2863
+    # 1: 775
+    # 2: 3894
+    # 3: 679
+    # 4: 4826
+
+

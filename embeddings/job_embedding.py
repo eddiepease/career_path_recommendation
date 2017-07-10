@@ -33,6 +33,19 @@ def create_job_embedding(embedding_size):
 
     return data, ordered_jobs
 
+# function to create skill embedding
+def create_cv_skill_embeddings(skills, skill_embeddings_dict):
+
+    # initialize
+    embedding_size = 100
+    skill_embed = np.zeros(shape=(1, embedding_size), dtype=np.float32)
+
+    # loop through the skills
+    for i,skill in enumerate(skills):
+        skill_embed = skill_embed + skill_embeddings_dict[skill]
+
+    return skill_embed
+
 
 def plot_with_labels(low_dim_embs, labels, filename):
     assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'

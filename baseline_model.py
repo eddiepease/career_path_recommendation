@@ -1,21 +1,110 @@
 import os
 import time
 import pickle
+import random
 import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from scipy.spatial.distance import hamming
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import scale
+from sklearn.multiclass import OutputCodeClassifier
 from collections import defaultdict,Counter
 
-from read_data import read_ontology_data
+from read_data import read_ontology_data,read_embeddings_json
 from split_data import create_train_test_set, create_train_test_set_stratified
-from embeddings.job_embedding import create_job_embedding
+from embeddings.job_embedding import create_job_embedding,create_cv_skill_embeddings
+
+
+def _check_estimator(estimator):
+    """Make sure that an estimator implements the necessary methods."""
+    if (not hasattr(estimator, "decision_function") and
+            not hasattr(estimator, "predict_proba")):
+        raise ValueError("The base estimator should implement "
+                         "decision_function or predict_proba!")
+
+def _predict_binary(estimator, X):
+    """Make predictions using a single binary estimator."""
+    try:
+        score = np.ravel(estimator.decision_function(X))
+    except (AttributeError, NotImplementedError):
+        # probabilities of the positive class
+        score = estimator.predict_proba(X)[:, 1]
+    return score
+
+# # TODO: finish altering this
+# class ECOC(BaseEstimator, ClassifierMixin, MetaEstimatorMixin):
+#
+#     # TODO: add multithreading with different cores
+#     def __init__(self, estimator, n_classifiers=10):
+#         self.estimator = estimator
+#         self.n_classifiers = n_classifiers
+#
+#     def fit(self, X, y):
+#         """Fit underlying estimators.
+#         Parameters
+#         ----------
+#         X : (sparse) array-like, shape = [n_samples, n_features]
+#             Data.
+#         y : numpy array of shape [n_samples]
+#             Multi-class targets.
+#         Returns
+#         -------
+#         self
+#         """
+#         if self.code_size <= 0:
+#             raise ValueError("code_size should be greater than 0, got {1}"
+#                              "".format(self.code_size))
+#
+#         _check_estimator(self.estimator)
+#
+#         self.classes_ = np.unique(y)
+#         n_classes = self.classes_.shape[0]
+#
+#         # TODO: come up with better way to come up with codebook: LSH?
+#         self.code_book_ = np.random.rand(n_classes, self.n_classifiers)
+#         self.code_book_ = np.round(self.code_book_)
+#
+#         classes_index = dict((c, i) for i, c in enumerate(self.classes_))
+#
+#         Y = np.array([self.code_book_[classes_index[y[i]]]
+#                       for i in range(X.shape[0])], dtype=np.int)
+#
+#         # TODO: fit binary classifiers
+#         self.estimators_ = [self.estimator.fit(X,Y[:,i]) for i in range(0,self.n_classifiers)]
+#
+#
+#         # self.estimators_ = Parallel(n_jobs=self.n_jobs)(
+#         #     delayed(_fit_binary)(self.estimator, X, Y[:, i])
+#         #     for i in range(Y.shape[1]))
+#
+#         return self
+#
+#     # TODO: complete this
+#     def predict_mpr(self, X, y):
+#         """Predict multi-class targets using underlying estimators.
+#         Parameters
+#         ----------
+#         X : (sparse) array-like, shape = [n_samples, n_features]
+#             Data.
+#
+#         y : list-like, shape = [n_samples]
+#
+#         Returns
+#         -------
+#         mpr : mean percentile rank, integer
+#         """
+#
+#         Y = np.array([_predict_binary(e, X) for e in self.estimators_]).T
+#
+#         hamm_dist = [hamming(Y,self.code_book_[i,:]) for i in range(0,self.classes_.shape[0])]
+#         pred = (Y, self.code_book_).argmin(axis=1)
+#         return self.classes_[pred]
+
 
 
 class BaselineModel():
@@ -40,7 +129,6 @@ class BaselineModel():
         return skills_profile_dict, unique_skills, job_dict, reverse_job_dict
 
     # create the features + labels for ML
-    # TODO: test that keys are in the same order every time
     def create_bag_of_skills_features(self, df, tf_idf = True):
         print('preparing bag of skills features...')
 
@@ -85,10 +173,10 @@ class BaselineModel():
         return X,labels
 
     # create features and labels using embeddings
-    def create_embedding_features(self, df, tf_idf=False, job_to_predict=0):
+    def create_embedding_features(self, df, include_cv_skills, tf_idf=False):
         print('preparing embedding features...')
 
-        # read in pre-requisites
+        # previous job
         _, _, job_dict, reverse_job_dict = self.prepare_feature_generation()
 
         features_dict = {}
@@ -96,18 +184,33 @@ class BaselineModel():
         feat_loc = df.columns.get_loc('normalised_title_feat')
         lab_loc = df.columns.get_loc('normalised_title_label')
 
+        # cv skills
+        file_name = 'data/ontology/skill-word2vec/data/skill_embeddings.json'
+        skill_embeddings_dict = read_embeddings_json(file_name)
+        skill_loc = df.columns.get_loc('skills')
+
         # read most recent job(s) from CV
         # for i in range(0,1000):
         for i in range(0, len(df)):
             normalized_title_feat = df.iloc[i, feat_loc]
             normalized_title_label = df.iloc[i, lab_loc]
+            skills = df.iloc[i,skill_loc]
 
-            # if no job_title in CV or job title is not in skills profile for either position
-            if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
+            # TODO: test this
+            if include_cv_skills:
+                # if no job_title in CV or job title is not in skills profile for either position
+                if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
 
-                job_idx = self.ordered_job_title.index(normalized_title_feat)
-                features_dict[i] = self.embedding[job_idx,:]
-                labels.append(job_dict[normalized_title_label])
+                    features_dict[i] = create_cv_skill_embeddings(skills,skill_embeddings_dict)
+                    labels.append(job_dict[normalized_title_label])
+
+            else:
+                # if no job_title in CV or job title is not in skills profile for either position
+                if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
+
+                    job_idx = self.ordered_job_title.index(normalized_title_feat)
+                    features_dict[i] = self.embedding[job_idx,:]
+                    labels.append(job_dict[normalized_title_label])
 
         # convert dict into numpy array
         features = pd.DataFrame(features_dict)
@@ -129,8 +232,8 @@ class BaselineModel():
         #generate
         if embedding:
             self.embedding, self.ordered_job_title = create_job_embedding(embedding_size=100)
-            X_train, y_train = self.create_embedding_features(self.train)
-            X_test, y_test = self.create_embedding_features(self.test)
+            X_train, y_train = self.create_embedding_features(self.train, include_cv_skills=True)
+            X_test, y_test = self.create_embedding_features(self.test,include_cv_skills=True)
         else:
             X_train, y_train = self.create_bag_of_skills_features(self.train, tf_idf=weighted)
             X_test, y_test = self.create_bag_of_skills_features(self.test, tf_idf=weighted)
@@ -176,6 +279,22 @@ class BaselineModel():
                        if y[i] in class_labels])
         return mpr
 
+
+    # # function to create the ecoc
+    # def implement_ecoc(self):
+    #
+    #     # define estimator
+    #     clf = SVC(probability=True)
+    #
+    #     # fit ecoc
+    #     ecoc = OutputCodeClassifier(clf,code_size=0.01)
+    #     ecoc.fit(self.X_train,self.y_train)
+    #
+    #     # evaluate model
+    #     mpr = self.mpr_scorer(ecoc,self.X_test,self.y_test)
+    #
+    #     return mpr
+
     # function to train + eval model
     def train_and_eval_model(self, model_type, save_name):
 
@@ -203,21 +322,65 @@ class BaselineModel():
         return mpr
 
 
+class MarkovModel():
+    def __init__(self, train, test):
+        self.train = train
+        self.test = test
+        self.base_model = BaselineModel(self.train,self.test)
+
+    def create_transition_matrix(self):
+
+        _,_,job_dict, reverse_job_dict = self.base_model.prepare_feature_generation()
+        n_jobs = len(job_dict.keys())
+
+        # create empty numpy array
+        trans_matrix = np.zeros(shape=(n_jobs,n_jobs),dtype=np.float32)
+        previous_job_list = list(self.train['normalised_title_feat'])
+        current_job_list = list(self.train['normalised_title_label'])
+
+        # loop through all training set
+        for i in range(0,len(self.train)):
+            pre_job = previous_job_list[i]
+            curr_job = current_job_list[i]
+            if pre_job in job_dict and curr_job in job_dict:
+                pre_idx = job_dict[previous_job_list[i]]
+                curr_idx = job_dict[current_job_list[i]]
+                trans_matrix[pre_idx,curr_idx] += 1
+
+        trans_matrix = trans_matrix / trans_matrix.sum()
+
+        return trans_matrix
+
+    # TODO: evaluate the MPR of the test set
+    def evaluate(self):
+        pass
+
+
+
+
+
 if __name__ == "__main__":
 
-    t0 = time.time()
     # create train/test set
-    train, test = create_train_test_set_stratified(n_files=15,threshold=10)
+    train, test = create_train_test_set_stratified(n_files=1,threshold=1)
 
-    # print(train.shape)
-    # print(test.shape)
-
-    # form features
-    folder = 'processed_15_embed_unweighted_10thres'
+    # run the Baseline Model
+    folder = 'cv_skill_trial'
     model = BaselineModel(train,test)
     model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
-    mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)
-    print('MPR: ', mpr)
+    # mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)
+    # print('MPR: ', mpr)
+
+    # # run Markov Model
+    # print('run Markov model...')
+    # model = MarkovModel(train,test)
+    # trans_matrix = model.create_transition_matrix()
+    # print(trans_matrix.shape)
+    # print(trans_matrix[:10,:10])
+
+
+
+
     #
     # # test the bag of skills
     # X_train = pickle.load(open('data/processed_1_bos_weighted/' + "X_train.pkl", "rb"))

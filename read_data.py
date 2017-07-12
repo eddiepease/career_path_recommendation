@@ -1,6 +1,5 @@
 import os
 import glob
-import h5py
 import time
 import json
 import numpy as np
@@ -9,6 +8,9 @@ import pickle
 
 from job_title_normalizer.ad_parsing import JobTitleNormalizer
 
+#################
+# helper objects + functions
+################
 
 class CVJobNormalizer():
     def __init__(self):
@@ -39,8 +41,6 @@ class CVJobNormalizer():
                 except IndexError:
                     pass
 
-
-# TODO: any other preprocessing required?
 def preprocessing(df):
     # split into 2 data frames
     df_1 = df[df['email_address'].isnull() == False]
@@ -55,6 +55,9 @@ def preprocessing(df):
 
     return df_result
 
+###############
+# reading cvs
+##############
 
 def read_json_data(num_file,folder):
 
@@ -73,59 +76,6 @@ def read_json_data(num_file,folder):
     df = preprocessing(pd.DataFrame(data))
 
     return df
-
-def read_ontology_data(ontology_name, file_type='csv'):
-    folder_name = 'data/ontology/' + ontology_name
-    allFiles = glob.glob(folder_name + "/*." + file_type)
-
-    if file_type == 'csv':
-        for file in allFiles:
-            output = pd.read_csv(file)
-    elif file_type == 'pkl':
-        for file in allFiles:
-            output = pickle.load( open( file, "rb" ) )
-    else:
-        assert (file_type == 'csv' or file_type == 'pkl'), "File type must be either CSV or PKL!"
-
-    assert (len(allFiles) > 0), "allFiles list can't be of length zero!"
-
-    return output
-
-def read_general_csv(file_path):
-    df = pd.read_csv(file_path)
-    return df
-
-def read_embeddings_json(file_path):
-    skill_embeddings = {}
-    with open(file_path) as f:
-        for line in f:
-            emb = json.loads(line)
-            skill_embeddings[emb["word"]] = np.asarray(emb["vector"]["values"], dtype=float)
-            
-    return skill_embeddings
-
-# function to convert the skills profile csv to a dict
-def skills_profile_to_dict(save_location):
-    # define dict
-    skills_profile_dict = {}
-    # {job title: [[skills],[TF-IDF weight],[normalization]] sorted by weight highest to lowest
-
-    # read in skills profiles + order + normalize TD-IDF scores
-    skills_profile_df = read_ontology_data('skill-profiles')
-    skills_profile_df.sort_values(['title', 'weight'], ascending=[False, False], inplace=True)
-    skills_profile_df.reset_index(drop=True, inplace=True)
-    skills_profile_df = skills_profile_df.assign(
-        normalized=skills_profile_df['weight'].div(skills_profile_df.groupby('title')['weight'].transform('sum')))
-
-    unique_job_titles = list(np.sort(skills_profile_df['title'].unique()))
-
-    for i,job in enumerate(unique_job_titles):
-        print(i)
-        temp_df = skills_profile_df[skills_profile_df['title'] == job]
-        skills_profile_dict[job] = [list(temp_df['skill']), list(temp_df['weight']), list(temp_df['normalized'])]
-
-    # save dictionary
-    pickle.dump(skills_profile_dict, open(save_location, 'wb'))
 
 def save_processed_dfs(save_name):
 
@@ -193,18 +143,89 @@ def read_h5_files(file_name, num_files):
     return df_result
 
 
+#######################
+# read ontologies + other data
+######################
+
+def read_ontology_data(ontology_name, file_type='csv'):
+    folder_name = 'data/ontology/' + ontology_name
+    allFiles = glob.glob(folder_name + "/*." + file_type)
+
+    if file_type == 'csv':
+        for file in allFiles:
+            output = pd.read_csv(file)
+    elif file_type == 'pkl':
+        for file in allFiles:
+            output = pickle.load( open( file, "rb" ) )
+    else:
+        assert (file_type == 'csv' or file_type == 'pkl'), "File type must be either CSV or PKL!"
+
+    assert (len(allFiles) > 0), "allFiles list can't be of length zero!"
+
+    return output
+
+def read_general_csv(file_path):
+    df = pd.read_csv(file_path)
+    return df
+
+def read_embeddings_json(file_path):
+    skill_embeddings = {}
+    with open(file_path) as f:
+        for line in f:
+            emb = json.loads(line)
+            skill_embeddings[emb["word"]] = np.asarray(emb["vector"]["values"], dtype=float)
+            
+    return skill_embeddings
+
+# function to convert the skills profile csv to a dict
+def skills_profile_to_dict(save_location):
+    # define dict
+    skills_profile_dict = {}
+    # {job title: [[skills],[TF-IDF weight],[normalization]] sorted by weight highest to lowest
+
+    # read in skills profiles + order + normalize TD-IDF scores
+    skills_profile_df = read_ontology_data('skill-profiles')
+    skills_profile_df.sort_values(['title', 'weight'], ascending=[False, False], inplace=True)
+    skills_profile_df.reset_index(drop=True, inplace=True)
+    skills_profile_df = skills_profile_df.assign(
+        normalized=skills_profile_df['weight'].div(skills_profile_df.groupby('title')['weight'].transform('sum')))
+
+    unique_job_titles = list(np.sort(skills_profile_df['title'].unique()))
+
+    for i,job in enumerate(unique_job_titles):
+        print(i)
+        temp_df = skills_profile_df[skills_profile_df['title'] == job]
+        skills_profile_dict[job] = [list(temp_df['skill']), list(temp_df['weight']), list(temp_df['normalized'])]
+
+    # save dictionary
+    pickle.dump(skills_profile_dict, open(save_location, 'wb'))
+
+def skills_pt_to_dict(save_location):
+    skills_dict = {}
+
+    # read in skills df
+    skills_df = read_ontology_data('skill-pt')
+    skills = list(skills_df['skill'])
+    weights = list(skills_df['idf_weight'])
+
+    for i, skill in enumerate(skills):
+        print(i)
+        skills_dict[skill] = weights[i]
+
+    # save dictionary
+    pickle.dump(skills_dict, open(save_location, 'wb'))
 
 
 
 if __name__ == "__main__":
 
-    # start time
-    t0 = time.time()
-
-    file_name = 'h5_cvs'
-    df = read_h5_files(file_name,num_files=1)
-
-    print(df.shape)
+    # # start time
+    # t0 = time.time()
+    #
+    # file_name = 'h5_cvs'
+    # df = read_h5_files(file_name,num_files=1)
+    #
+    # print(df.shape)
 
     # filename = 'data/cvs_v2_processed/test_file.h5'
     # f = h5py.File(filename, 'r')
@@ -215,6 +236,15 @@ if __name__ == "__main__":
     # List all groups
     # print("Keys: %s" % f.keys())
     # a_group_key = f.keys()[0]
+
+    # test_df = read_ontology_data('skill-profiles', file_type='csv')
+    # print(len(test_df[test_df['title'] == 'team secretary']))
+    #
+    #
+    # test_dict = read_ontology_data('skill-profiles',file_type='pkl')
+    # print(len(test_dict['team secretary'][0]))
+
+    skills_pt_to_dict('data/ontology/skill-pt/skill_pt_dict.pkl')
 
 
 

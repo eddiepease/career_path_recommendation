@@ -36,77 +36,7 @@ def _predict_binary(estimator, X):
         score = estimator.predict_proba(X)[:, 1]
     return score
 
-# # TODO: finish altering this
-# class ECOC(BaseEstimator, ClassifierMixin, MetaEstimatorMixin):
-#
-#     # TODO: add multithreading with different cores
-#     def __init__(self, estimator, n_classifiers=10):
-#         self.estimator = estimator
-#         self.n_classifiers = n_classifiers
-#
-#     def fit(self, X, y):
-#         """Fit underlying estimators.
-#         Parameters
-#         ----------
-#         X : (sparse) array-like, shape = [n_samples, n_features]
-#             Data.
-#         y : numpy array of shape [n_samples]
-#             Multi-class targets.
-#         Returns
-#         -------
-#         self
-#         """
-#         if self.code_size <= 0:
-#             raise ValueError("code_size should be greater than 0, got {1}"
-#                              "".format(self.code_size))
-#
-#         _check_estimator(self.estimator)
-#
-#         self.classes_ = np.unique(y)
-#         n_classes = self.classes_.shape[0]
-#
-#         # TODO: come up with better way to come up with codebook: LSH?
-#         self.code_book_ = np.random.rand(n_classes, self.n_classifiers)
-#         self.code_book_ = np.round(self.code_book_)
-#
-#         classes_index = dict((c, i) for i, c in enumerate(self.classes_))
-#
-#         Y = np.array([self.code_book_[classes_index[y[i]]]
-#                       for i in range(X.shape[0])], dtype=np.int)
-#
-#         # TODO: fit binary classifiers
-#         self.estimators_ = [self.estimator.fit(X,Y[:,i]) for i in range(0,self.n_classifiers)]
-#
-#
-#         # self.estimators_ = Parallel(n_jobs=self.n_jobs)(
-#         #     delayed(_fit_binary)(self.estimator, X, Y[:, i])
-#         #     for i in range(Y.shape[1]))
-#
-#         return self
-#
-#     # TODO: complete this
-#     def predict_mpr(self, X, y):
-#         """Predict multi-class targets using underlying estimators.
-#         Parameters
-#         ----------
-#         X : (sparse) array-like, shape = [n_samples, n_features]
-#             Data.
-#
-#         y : list-like, shape = [n_samples]
-#
-#         Returns
-#         -------
-#         mpr : mean percentile rank, integer
-#         """
-#
-#         Y = np.array([_predict_binary(e, X) for e in self.estimators_]).T
-#
-#         hamm_dist = [hamming(Y,self.code_book_[i,:]) for i in range(0,self.classes_.shape[0])]
-#         pred = (Y, self.code_book_).argmin(axis=1)
-#         return self.classes_[pred]
-
-
-
+# class for a baseline model
 class BaselineModel():
 
     def __init__(self, train, test):
@@ -115,10 +45,9 @@ class BaselineModel():
 
     def prepare_feature_generation(self):
         skills_profile_dict = read_ontology_data('skill-profiles',file_type='pkl')
+        unique_job_titles = list(np.sort(list(skills_profile_dict.keys())))
 
-        skills_profile_df = read_ontology_data('skill-profiles')
-        unique_job_titles = list(np.sort(skills_profile_df['title'].unique()))
-        unique_skills = list(np.sort(skills_profile_df['skill'].unique()))
+        skills_dict = read_ontology_data('skill-pt',file_type='pkl')
 
         job_dict = {}
         for job in unique_job_titles:
@@ -126,14 +55,14 @@ class BaselineModel():
 
         reverse_job_dict = dict(zip(job_dict.values(), job_dict.keys()))
 
-        return skills_profile_dict, unique_skills, job_dict, reverse_job_dict
+        return skills_profile_dict, skills_dict, job_dict, reverse_job_dict
 
     # create the features + labels for ML
-    def create_bag_of_skills_features(self, df, tf_idf = True):
+    def create_bag_of_skills_features(self, df, include_cv_skills, tf_idf = True):
         print('preparing bag of skills features...')
 
         # read in pre-requisites
-        skill_profile_dict, unique_skills, job_dict, reverse_job_dict = self.prepare_feature_generation()
+        skill_profile_dict, skills_dict, job_dict, reverse_job_dict = self.prepare_feature_generation()
 
         # define various inputs
         v = DictVectorizer(sparse=True)
@@ -141,32 +70,54 @@ class BaselineModel():
         labels = []
         feat_loc = df.columns.get_loc('normalised_title_feat')
         lab_loc = df.columns.get_loc('normalised_title_label')
+        skill_loc = df.columns.get_loc('skills')
 
         # read most recent job(s) from CV
         # for i in range(0,1000):
         for i in range(0, len(df)):
             normalized_title_feat = df.iloc[i,feat_loc]
             normalized_title_label = df.iloc[i,lab_loc]
+            skills = df.iloc[i, skill_loc]
 
-            # if no job_title in CV or job title is not in skills profile for either position
-            if normalized_title_feat in skill_profile_dict and normalized_title_label in skill_profile_dict:
+            if include_cv_skills:
 
-                bos_dict = dict.fromkeys(unique_skills, 0)
-                skills = skill_profile_dict[normalized_title_feat][0]
-                weights = skill_profile_dict[normalized_title_feat][1]
-                for j, skill in enumerate(skills):
-                    if tf_idf == True:
-                        bos_dict[skill] += weights[j]
-                    else:
-                        bos_dict[skill] += 1
+                # if no job_title in CV or job title is not in skills profile for either position
+                if normalized_title_feat in skill_profile_dict and normalized_title_label in skill_profile_dict:
 
-                # if i % 1000 == 0:
-                #     print(list(temp_dict.keys())[:10]) # testing
+                    bos_dict = dict.fromkeys(list(skills_dict.keys()), 0)
+                    for j, skill in enumerate(skills):
+                        try:
+                            bos_dict[skill] += skills_dict[skill]
+                        except KeyError:
+                            print('Missing skill is: ', skill)
+                            pass
 
-                features.append(bos_dict)
+                    features.append(bos_dict)
 
-                # create labels
-                labels.append(job_dict[normalized_title_label])
+                    # create labels
+                    labels.append(job_dict[normalized_title_label])
+
+            else:
+
+                # if no job_title in CV or job title is not in skills profile for either position
+                if normalized_title_feat in skill_profile_dict and normalized_title_label in skill_profile_dict:
+
+                    bos_dict = dict.fromkeys(list(skills_dict.keys()), 0)
+                    skills = skill_profile_dict[normalized_title_feat][0]
+                    weights = skill_profile_dict[normalized_title_feat][1]
+                    for j, skill in enumerate(skills):
+                        if tf_idf == True:
+                            bos_dict[skill] += weights[j]
+                        else:
+                            bos_dict[skill] += 1
+
+                    # if i % 1000 == 0:
+                    #     print(list(temp_dict.keys())[:10]) # testing
+
+                    features.append(bos_dict)
+
+                    # create labels
+                    labels.append(job_dict[normalized_title_label])
 
         X = v.fit_transform(features).toarray()
 
@@ -196,7 +147,6 @@ class BaselineModel():
             normalized_title_label = df.iloc[i, lab_loc]
             skills = df.iloc[i,skill_loc]
 
-            # TODO: test this
             if include_cv_skills:
                 # if no job_title in CV or job title is not in skills profile for either position
                 if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
@@ -235,8 +185,8 @@ class BaselineModel():
             X_train, y_train = self.create_embedding_features(self.train, include_cv_skills=True)
             X_test, y_test = self.create_embedding_features(self.test,include_cv_skills=True)
         else:
-            X_train, y_train = self.create_bag_of_skills_features(self.train, tf_idf=weighted)
-            X_test, y_test = self.create_bag_of_skills_features(self.test, tf_idf=weighted)
+            X_train, y_train = self.create_bag_of_skills_features(self.train, include_cv_skills=True, tf_idf=weighted)
+            X_test, y_test = self.create_bag_of_skills_features(self.test, include_cv_skills=True, tf_idf=weighted)
 
         # save
         path = 'data/' + save_name + '/'
@@ -322,38 +272,142 @@ class BaselineModel():
         return mpr
 
 
-class MarkovModel():
-    def __init__(self, train, test):
-        self.train = train
-        self.test = test
-        self.base_model = BaselineModel(self.train,self.test)
+# TODO: sort out definition of the classifer
+# class which implements ECOC method
+class ECOC(BaselineModel):
 
-    def create_transition_matrix(self):
+    # TODO: add multithreading with different cores
+    def __init__(self, train, test, estimator, n_classifiers=10):
+        BaselineModel.__init__(self,train,test)
+        self.estimator = estimator
+        self.n_classifiers = n_classifiers
 
-        _,_,job_dict, reverse_job_dict = self.base_model.prepare_feature_generation()
-        n_jobs = len(job_dict.keys())
+    # method to create the code book which the classifier uses
+    # TODO: problem to investigate - number of duplicate rows
+    def create_code_book(self,save_name):
+        print('creating code book...')
 
-        # create empty numpy array
-        trans_matrix = np.zeros(shape=(n_jobs,n_jobs),dtype=np.float32)
-        previous_job_list = list(self.train['normalised_title_feat'])
-        current_job_list = list(self.train['normalised_title_label'])
+        # load data into object
+        self.load_transformed_data(save_name, remove_rare=True)
 
-        # loop through all training set
-        for i in range(0,len(self.train)):
-            pre_job = previous_job_list[i]
-            curr_job = current_job_list[i]
-            if pre_job in job_dict and curr_job in job_dict:
-                pre_idx = job_dict[previous_job_list[i]]
-                curr_idx = job_dict[current_job_list[i]]
-                trans_matrix[pre_idx,curr_idx] += 1
+        # import job embedding
+        self.embedding, self.ordered_job_title = create_job_embedding(embedding_size=100)
 
-        trans_matrix = trans_matrix / trans_matrix.sum()
+        # need to write a line which selects the relevant parts of the embedding
+        idx = np.sort(np.unique(self.y_train))
+        self.embedding = self.embedding[idx]
+        self.ordered_job_title = [self.ordered_job_title[i] for i in idx]
 
-        return trans_matrix
+        # set up a blank array
+        code_book = np.ones(shape=(len(self.ordered_job_title),self.n_classifiers))
 
-    # TODO: evaluate the MPR of the test set
-    def evaluate(self):
-        pass
+        # loop through columns in cookbook
+        for i in range(self.n_classifiers):
+            col_imbalance = code_book[:,i].sum() / code_book.shape[0]
+            error_margin = 0.05
+            while abs(col_imbalance) > error_margin:
+                w = np.random.rand(100,1) * 2 - 1
+                code_col = np.squeeze(np.dot(self.embedding,w),axis=1)
+                code_col = np.sign(code_col)
+
+                col_imbalance = code_col.sum() / code_book.shape[0]
+                code_book[:,i] = code_col
+
+        self.code_book_ = code_book
+
+        # # code to output same codes
+        # test_code = np.array([-1., -1., -1., -1., -1.,  1.,  1.,  1.,  1., -1.,  1.,  1., -1., 1., -1.])
+        # for i,row in enumerate(code_book):
+        #     if row == test_code.all():
+        #         job_title = self.ordered_job_title[i]
+        #         print(job_title)
+
+        return self
+
+    # method to fit the classifier
+    # TODO: run binary classifiers on many CPUs
+    def fit(self):
+        print('fitting ecoc classifiers...')
+
+        _check_estimator(self.estimator)
+
+        # set up
+        self.classes_ = np.unique(self.y_train)
+        # n_classes = self.classes_.shape[0]
+        self.classes_index = dict((c, j) for j, c in enumerate(self.classes_))
+        Y = np.array([self.code_book_[self.classes_index[self.y_train[i]]]
+                      for i in range(self.X_train.shape[0])], dtype=np.int)
+
+        # fit the binary classifiers
+        t0 = time.time()
+        # estimators = []
+        # for k in range(self.n_classifiers):
+        #     curr_est = self.estimator.fit(self.X_train, Y[:,k])
+        #     estimators.append(curr_est)
+        self.estimators_ = [SVC().fit(self.X_train, Y[:, k]) for k in range(0, self.n_classifiers)]
+        t1 = time.time()
+        print('Training time for classifiers:', t1-t0)
+
+        return self
+
+    # TODO: work out why results isn't as good as expected
+    # TODO: different evaluation possible?
+    def predict_mpr(self):
+        print('Predicting mpr...')
+
+        # initialise mpr list
+        pr_list = []
+
+        classifier_output = np.array([e.predict(self.X_test) for e in self.estimators_]).T
+
+        # loop through all the rows in test
+        for i,row in enumerate(classifier_output):
+
+            # calculate MPR score
+            hamm_dist = np.array([hamming(row, self.code_book_[j, :]) for j in range(0, len(self.code_book_))])
+            temp = hamm_dist.argsort()
+            ranks = np.empty(len(hamm_dist), int)
+            ranks[temp] = np.arange(start=1, stop=len(hamm_dist) + 1)
+            pr = ranks[self.classes_index[self.y_test[i]]] / len(hamm_dist)
+            pr_list.append(pr)
+
+        mpr = np.mean(pr_list)
+
+        return mpr
+
+
+# class MarkovModel():
+#     def __init__(self, train, test):
+#         self.train = train
+#         self.test = test
+#         self.base_model = BaselineModel(self.train,self.test)
+#
+#     def create_transition_matrix(self):
+#
+#         _,_,job_dict, reverse_job_dict = self.base_model.prepare_feature_generation()
+#         n_jobs = len(job_dict.keys())
+#
+#         # create empty numpy array
+#         trans_matrix = np.zeros(shape=(n_jobs,n_jobs),dtype=np.float32)
+#         previous_job_list = list(self.train['normalised_title_feat'])
+#         current_job_list = list(self.train['normalised_title_label'])
+#
+#         # loop through all training set
+#         for i in range(0,len(self.train)):
+#             pre_job = previous_job_list[i]
+#             curr_job = current_job_list[i]
+#             if pre_job in job_dict and curr_job in job_dict:
+#                 pre_idx = job_dict[previous_job_list[i]]
+#                 curr_idx = job_dict[current_job_list[i]]
+#                 trans_matrix[pre_idx,curr_idx] += 1
+#
+#         trans_matrix = trans_matrix / trans_matrix.sum()
+#
+#         return trans_matrix
+#
+#     # TODO: evaluate the MPR of the test set
+#     def evaluate(self):
+#         pass
 
 
 
@@ -362,14 +416,32 @@ class MarkovModel():
 if __name__ == "__main__":
 
     # create train/test set
-    train, test = create_train_test_set_stratified(n_files=1,threshold=1)
+    train, test = create_train_test_set_stratified(n_files=2,threshold=1)
 
-    # run the Baseline Model
-    folder = 'cv_skill_trial'
-    model = BaselineModel(train,test)
-    model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
+    # # run the Baseline Model
+    # folder = 'cv_skill_trial'
+    # model = BaselineModel(train,test)
+    # model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
     # mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)
     # print('MPR: ', mpr)
+
+    # test ECOC
+    folder = 'ecoc_test'
+    ecoc = ECOC(train,test,estimator=SVC(),n_classifiers=15)
+    # ecoc.save_transformed_data(embedding=True, weighted=False, save_name=folder)
+    ecoc.create_code_book(save_name=folder)
+    ecoc.fit()
+    mpr = ecoc.predict_mpr()
+    print('MPR is:', mpr)
+
+
+
+    # ecoc.save_transformed_data(embedding=True,weighted=False,save_name=folder)
+    # ecoc.fit(save_name=folder)
+    # ecoc.predict_mpr()
+
+
+
 
     # # run Markov Model
     # print('run Markov model...')
@@ -377,6 +449,9 @@ if __name__ == "__main__":
     # trans_matrix = model.create_transition_matrix()
     # print(trans_matrix.shape)
     # print(trans_matrix[:10,:10])
+
+
+
 
 
 

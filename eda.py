@@ -9,61 +9,45 @@ from wordcloud import WordCloud
 from fuzzywuzzy import fuzz
 import gmplot
 
-from read_data import read_json_data,read_ontology_data,read_general_csv
-from job_title_normalizer.ad_parsing import JobTitleNormalizer
+from read_data import CVJobNormalizer,read_json_data,read_ontology_data,read_general_csv
 
+
+# class used for any exploratory data analysis - both transformation and visualization methods
 class ExploratoryDataAnalysis():
 
-    def __init__(self, df):
+    def __init__(self, df, job_title_location):
         self.df = df
         self.years_bound = 60
+        self.job_title_location = job_title_location
 
     ###############
     # transformation methods
     ###############
 
     def work_experience_months(self):
-        df = self.df['total_months_work_exp'].astype('float').dropna()
-        self.transformed_df = self.df[self.df < self.years_bound * 12]
+        temp_df = self.df['total_months_work_exp'].astype('float').dropna()
+        self.transformed_df = temp_df[temp_df < self.years_bound * 12]
 
     def work_experience_years(self):
-        df = self.df['total_months_work_exp'].astype('float').dropna()
-        self.transformed_df = self.df[self.df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
+        temp_df = self.df['total_months_work_exp'].astype('float').dropna()
+        self.transformed_df = temp_df[temp_df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
+
+    # TODO: add this
+    def number_of_roles(self):
+        pass
 
 
-    def most_recent_job_title(self, job_num=0):
+    def most_recent_job_title(self, file_name, job_num=0):
         print('Start most_recent_job_title method...')
 
         # job_num defaults to most recent job (=0), 2nd most recent job - job_num=1 etc..
 
         most_recent_job_title = []
-
-        # set up the normalizer
-        fnoun_plural = pickle.load(open("job_title_normalizer/data/fnoun_plural_dict.pkl", "rb"), encoding='latin1')
-        fnoun_set = pickle.load(open("job_title_normalizer/data/fnoun_set.pkl", "rb"), encoding='latin1')
-        spellchecker = pickle.load(open("job_title_normalizer/data/spellchecker_dict.pkl", "rb"), encoding='latin1')
-        stopwords = pickle.load(open("job_title_normalizer/data/stopwords.pkl", "rb"), encoding='latin1')
-        title = pickle.load(open("job_title_normalizer/data/title_dict.pkl", "rb"), encoding='latin1')
-        token_sub = pickle.load(open("job_title_normalizer/data/token_sub_dict.pkl", "rb"), encoding='latin1')
-        us_uk_spellchecker = pickle.load(open("job_title_normalizer/data/us_uk_spellchecker_dict.pkl", "rb"),
-                                         encoding='latin1')
-
-        job_title_normalizer = JobTitleNormalizer(stopwords, us_uk_spellchecker, spellchecker, fnoun_plural, title,
-                                                  token_sub, fnoun_set)
+        cv_job_normalizer = CVJobNormalizer()
 
         # loop through df
         for i in range(0, len(self.df)):
-            # print(i)
-            # print(df['employment_history'][i])
-            if len(df['employment_history'][i]) > 0:
-                try:
-                    raw_title = self.df['employment_history'][i][job_num]['raw_job_title']
-                    normalized_title = job_title_normalizer.process(raw_title)['title_norm']
-                    most_recent_job_title.append(normalized_title)
-                except KeyError:
-                    pass
-                except IndexError:
-                    pass
+            most_recent_job_title.append(cv_job_normalizer.normalized_job(df=self.df, n_row=i,job_num=job_num))
 
         # cross reference with ontology
         print('reference against ontology...')
@@ -71,10 +55,10 @@ class ExploratoryDataAnalysis():
 
         # temp saving
         freq_df = pd.Series(self.transformed_df['pt']).value_counts().to_dict()
-        pickle.dump(freq_df, open("job_freq.pkl","wb"))
+        pickle.dump(freq_df, open(self.job_title_location + file_name + ".pkl","wb"))
 
 
-    def most_recent_job_category(self):
+    def most_recent_job_category(self, job_title_filename):
         print('Start most_recent_job_category method...')
 
         # generate job title category
@@ -87,7 +71,7 @@ class ExploratoryDataAnalysis():
         right_df.drop('prob', axis=1, inplace=True)
 
         # load in normalized job categories + join
-        left_dict = pickle.load(open("job_freq.pkl", "rb"))
+        left_dict = pickle.load(open(self.job_title_location + job_title_filename + ".pkl", "rb"))
         left_df = pd.DataFrame(list(left_dict.items()),columns=['title','count'])
         merge_df = pd.merge(left_df, right_df, how='left', on='title')
 
@@ -106,7 +90,7 @@ class ExploratoryDataAnalysis():
         uni = []
         abbrev = ['ucl', 'lse', 'soas', 'uea', 'uwe']
         qual_list = ['master','bachelor','ba','ma','msc','bsc']
-        for row in range(0, len(df)):
+        for row in range(0, len(self.df)):
             num_entries = len(self.df['education_history'][row])
             uni_attend = False
             if num_entries > 0:
@@ -136,12 +120,14 @@ class ExploratoryDataAnalysis():
 
     # note that this method saves a html file in figures folder
     # you need to screenshot locally to get a png
-    def location(self):
+    def location(self,file_location):
         print('Start location method..')
+
+        assert ('.html' in file_location), "Must save the map as html file!"
 
         # load postcodes ontology + merge with postcodes in the CVs
         post_ontology = read_general_csv('data/ontology/ukpostcodes.csv')
-        left_df = df['postal_code'].dropna()
+        left_df = self.df['postal_code'].dropna()
         left_df = pd.DataFrame(left_df.map(lambda x: str(x).replace(' ', '')))
         postcode_df = left_df.merge(post_ontology, how='left', left_on='postal_code', right_on='postcode')
         postcode_df = postcode_df[['postal_code', 'latitude', 'longitude']]
@@ -154,9 +140,8 @@ class ExploratoryDataAnalysis():
         lngs = list(postcode_df['longitude'])
 
         # create + save a heatmap
-        # create a heatmap!
         gmap.heatmap(lats, lngs)
-        gmap.draw("figures/cv_map.html")
+        gmap.draw(file_location)
 
     # TODO: add wordcloud of skills
 
@@ -164,24 +149,23 @@ class ExploratoryDataAnalysis():
     # visualization methods
     ##########
 
-    def generate_histogram(self):
-        ax = sns.distplot(self.transformed_df)
-        return ax
+    def generate_histogram(self,xlabel_name,axis=None):
+        sns.distplot(self.transformed_df,ax=axis).set(xlabel=xlabel_name)
 
-    def generate_word_cloud(self):
+    def generate_word_cloud(self,file,title,save_location):
         job_freq_dict = pickle.load(open("job_freq.pkl","rb"))
         wordcloud = WordCloud().generate_from_frequencies(job_freq_dict)
 
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
-        plt.savefig('figures/whole_word_cloud.png')
+        plt.title(title)
+        plt.savefig(save_location)
 
-    def generate_bar_chart(self):
+    def generate_bar_chart(self,xlabel_name, axis=None):
         [first_column_name, second_column_name] = self.transformed_df.columns
-        ax = sns.barplot(x=first_column_name,y=second_column_name,data=self.transformed_df)
+        sns.barplot(x=first_column_name,y=second_column_name,data=self.transformed_df,ax=axis)\
+            .set(xlabel=xlabel_name)
         # plt.savefig('figures/whole_university_attended.png')
-
-        return ax
 
     def generate_industry_comparison_bar_chart(self):
 
@@ -204,45 +188,10 @@ class ExploratoryDataAnalysis():
 if __name__ == '__main__':
 
     # read data
-    df = read_json_data()
+    df = read_json_data(folder='data/cvs/')
 
     # transform data
-    eda = ExploratoryDataAnalysis(df)
-    # eda.location()
-    # eda.most_recent_job_title()
-    eda.attended_university()
-    eda.generate_bar_chart()
-
-    # eda.most_recent_job_title()
-
-    # graph.attended_university()
-    # ax = graph.generate_bar_chart()
-    # print(graph.transformed_df.head(30))
-    #
-    # ax = graph.generate_industry_comparison_bar_chart()
-    #
-    # plt.show(ax)
-
-
-    # graph.most_recent_job_title()
-    # graph.generate_word_cloud()
-    # graph.most_recent_job_category()
-
-
-    # print('Number of rows: ',len(df))
-    # print('Number of NaNs', graph.transformed_df['pt'].isnull().sum())
-    # print(graph.transformed_df.head(100))
-    # print(len(graph.transformed_df))
-
-
-
-
-    # # plot graph
-    # plt.show(ax)
-
-    # word cloud test
-
-
-
-
-
+    eda = ExploratoryDataAnalysis(df,job_title_location='')
+    eda.work_experience_years()
+    eda.generate_histogram()
+    plt.savefig('test.png')

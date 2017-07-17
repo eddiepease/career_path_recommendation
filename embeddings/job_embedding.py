@@ -1,3 +1,5 @@
+import os
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
@@ -32,6 +34,25 @@ def create_job_embedding(embedding_size):
         data[i, :] = job_array
 
     return data, ordered_jobs
+
+# function to save job embedding as dict
+def save_job_embed_as_dict():
+    data,ordered_jobs = create_job_embedding(embedding_size=100)
+
+    # create dict
+    job_embed_dict = {}
+
+    for i,job in enumerate(ordered_jobs):
+        job_embed_dict[job] = list(data[i,:])
+
+    # save dict as json
+    path = 'data/ontology/job-word2vec/'
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    pickle.dump(job_embed_dict, open(path + "job_embedding.pkl", "wb"))
+
+
 
 # function to create skill embedding
 def create_cv_skill_embeddings(skills, skill_embeddings_dict):
@@ -105,9 +126,11 @@ if __name__ == "__main__":
     # TODO: think about a good way to evaluate the embeddings in a more rigorous way
     # TODO: is there a different way to generate the embeddings
 
-    # create job embedding
-    job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same size as skill embedding
+    # # create job embedding
+    # job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same size as skill embedding
+    #
+    # #plot using TSNE
+    # evaluate_with_tsne(job_embedding,num_to_plot=800, input_labels=job_titles, filename='job_tsne_2.png')
 
-    #plot using TSNE
-    evaluate_with_tsne(job_embedding,num_to_plot=800, input_labels=job_titles, filename='job_tsne_2.png')
+    save_job_embed_as_dict()
 

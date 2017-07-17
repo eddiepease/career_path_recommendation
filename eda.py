@@ -9,7 +9,7 @@ from wordcloud import WordCloud
 from fuzzywuzzy import fuzz
 import gmplot
 
-from read_data import CVJobNormalizer,read_json_data,read_ontology_data,read_general_csv
+from read_data import CVJobNormalizer,read_all_json_data,read_ontology_data,read_general_csv
 
 
 # class used for any exploratory data analysis - both transformation and visualization methods
@@ -32,22 +32,37 @@ class ExploratoryDataAnalysis():
         temp_df = self.df['total_months_work_exp'].astype('float').dropna()
         self.transformed_df = temp_df[temp_df < self.years_bound * 12].floordiv(12.0).rename('total_years_work_exp')
 
-    # TODO: add this
     def number_of_roles(self):
-        pass
+        temp_df = self.df['employment_history_norm'].apply(len)
+        self.transformed_df = temp_df
 
 
-    def most_recent_job_title(self, file_name, job_num=0):
+    def most_recent_job_title(self, file_name, job_num=0,normalizer_required=False):
         print('Start most_recent_job_title method...')
 
         # job_num defaults to most recent job (=0), 2nd most recent job - job_num=1 etc..
 
         most_recent_job_title = []
-        cv_job_normalizer = CVJobNormalizer()
 
-        # loop through df
-        for i in range(0, len(self.df)):
-            most_recent_job_title.append(cv_job_normalizer.normalized_job(df=self.df, n_row=i,job_num=job_num))
+        if normalizer_required:
+            cv_job_normalizer = CVJobNormalizer()
+
+            # loop through df
+            for i in range(0, len(self.df)):
+                most_recent_job_title.append(cv_job_normalizer.normalized_job(df=self.df, n_row=i,job_num=job_num))
+
+        else:
+            for j in range(0,len(self.df)):
+                print(j)
+                if isinstance(df['employment_history_norm'][j], list):
+                    if len(df['employment_history_norm'][j]) > 0:
+                        try:
+                            norm_title = df['employment_history_norm'][j][job_num]['title_norm']
+                            most_recent_job_title.append(norm_title)
+                        except KeyError:
+                            pass
+                        except IndexError:
+                            pass
 
         # cross reference with ontology
         print('reference against ontology...')
@@ -56,6 +71,25 @@ class ExploratoryDataAnalysis():
         # temp saving
         freq_df = pd.Series(self.transformed_df['pt']).value_counts().to_dict()
         pickle.dump(freq_df, open(self.job_title_location + file_name + ".pkl","wb"))
+
+    def number_missing_job_titles(self):
+        num_missing_titles = []
+        for i in range(0, len(self.df)):
+            print(i)
+            missing_roles_counter = 0
+            person_emp_list = df['employment_history_norm'][i]
+            if isinstance(person_emp_list, list):
+                if len(person_emp_list) > 0:
+                    # loop through all roles
+                    for j in range(0,len(person_emp_list)):
+                        if 'title_norm' not in person_emp_list[j]:
+                            missing_roles_counter += 1
+
+            # append final counter to list
+            num_missing_titles.append(missing_roles_counter)
+
+        # convert to df
+        self.transformed_df = pd.DataFrame(num_missing_titles, columns=['pt'])
 
 
     def most_recent_job_category(self, job_title_filename):
@@ -84,6 +118,7 @@ class ExploratoryDataAnalysis():
         self.transformed_df = self.transformed_df[['count','category_name']]
 
     # TODO: check whether the qualification is working as expected
+    # TODO: replace criteria with James' code
     # TODO: find a better way of displaying this information visualy
     def attended_university(self):
         print('Start attended_university method..')
@@ -159,7 +194,7 @@ class ExploratoryDataAnalysis():
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
         plt.title(title)
-        plt.savefig(save_location)
+        plt.savefig(save_location + file)
 
     def generate_bar_chart(self,xlabel_name, axis=None):
         [first_column_name, second_column_name] = self.transformed_df.columns
@@ -188,10 +223,25 @@ class ExploratoryDataAnalysis():
 if __name__ == '__main__':
 
     # read data
-    df = read_json_data(folder='data/cvs/')
+    df = read_all_json_data(folder='data/cvs_v3/')
 
     # transform data
-    eda = ExploratoryDataAnalysis(df,job_title_location='')
-    eda.work_experience_years()
-    eda.generate_histogram()
-    plt.savefig('test.png')
+    eda = ExploratoryDataAnalysis(df,job_title_location='data/')
+    # eda.most_recent_job_title(file_name='cvs_v3_job_freq')
+    # eda.most_recent_job_category(job_title_filename='cvs_v3_job_freq')
+    # eda.number_of_roles()
+    eda.number_missing_job_titles()
+
+
+    # plot data
+    save_location = 'figures/whole_jobsite_data/cvs_v3/'
+    # eda.generate_word_cloud(file='job_wordcloud.png',title='Job Title Wordcloud',save_location=save_location)
+    # eda.generate_bar_chart(xlabel_name='Normalized count')
+    eda.generate_histogram(xlabel_name='Number of missing roles')
+    plt.savefig(save_location + 'number_missing_roles.png')
+
+    # # transform data
+    # eda = ExploratoryDataAnalysis(df,job_title_location='')
+    # eda.work_experience_years()
+    # eda.generate_histogram()
+    # plt.savefig('test.png')

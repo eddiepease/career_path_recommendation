@@ -1,5 +1,6 @@
 import os
 import glob
+import h5py
 import time
 import json
 import numpy as np
@@ -47,7 +48,7 @@ def preprocessing(df):
     df_2 = df[df['email_address'].isnull() == True]
 
     # transform df_1
-    df_1.sort_values('meta_date_of_cv_upload',ascending=False,inplace=True)
+    df_1.sort_values('revision_date',ascending=False,inplace=True)
     df_1.drop_duplicates('email_address',inplace=True)
 
     # merge back together
@@ -59,7 +60,7 @@ def preprocessing(df):
 # reading cvs
 ##############
 
-def read_json_data(num_file,folder):
+def read_single_json_data(num_file,folder):
 
     # define variables
     data = []
@@ -77,36 +78,54 @@ def read_json_data(num_file,folder):
 
     return df
 
-def save_processed_dfs(save_name):
+
+def read_all_json_data(folder):
+    # define variables
+    data = []
+    files = os.listdir(folder)[:1]
+
+    # loop through files
+    for file in files:
+        print(file)
+        path = folder + file
+        with open(path) as f:
+            for line in f:
+                data.append(json.loads(line))
+
+    df = preprocessing(pd.DataFrame(data))
+    return df
+
+# function to save baseline models into h5
+def save_processed_dfs_baseline(save_name):
 
     # define hdf5
     store = pd.HDFStore('data/cvs_v2_processed/' + save_name + '.h5')
-    files = os.listdir('data/cvs_v2/').remove('_SUCCESS') # TODO: remove SUCCESS from this
+    files = [file for file in os.listdir('data/cvs_v2/') if file != '_SUCCESS']
 
     t0 = time.time()
     print('t0:',t0)
 
     # loop through all files
-    for i in range(0,len(files)):
+    for i in range(0,1):
         print(i)
         print(time.time())
 
         # import and definitions
-        df = read_json_data(i,folder='data/cvs_v2/') # read in df
+        df = read_single_json_data(i,folder='data/cvs_v2/') # read in df
         cv_job_normalizer = CVJobNormalizer()
         valid_indices = []
         job_feat_list = []
         job_label_list = []
         job_to_predict = 0
 
-        for i in range(0, len(df)):
+        for j in range(0, len(df)):
             # print(i)
-            normalized_title_feat = cv_job_normalizer.normalized_job(df, n_row=i, job_num=job_to_predict + 1)
-            normalized_title_label = cv_job_normalizer.normalized_job(df, n_row=i, job_num=job_to_predict)
+            normalized_title_feat = cv_job_normalizer.normalized_job(df, n_row=j, job_num=job_to_predict + 1)
+            normalized_title_label = cv_job_normalizer.normalized_job(df, n_row=j, job_num=job_to_predict)
 
             # track index of valid CVs
             if normalized_title_feat is not None and normalized_title_label is not None:
-                valid_indices.append(i)
+                valid_indices.append(j)
                 job_feat_list.append(normalized_title_feat)
                 job_label_list.append(normalized_title_label)
 
@@ -122,10 +141,71 @@ def save_processed_dfs(save_name):
     t1 = time.time()
     print('Total time taken:', t1-t0)
 
-    # test_1_df = store['1']
-    # print(test_1_df.shape)
-    # test_2_df = store['2']
-    # print(test_2_df.shape)
+
+# function to save nemo data into h5
+# TODO: test
+# TODO: how to deal with missing data - at the moment the df and numpy array inconsistent lengths
+# TODO: think how this works with stratified approach
+def save_processed_dfs_nemo(max_roles=10):
+
+    # define hdf5
+    np_store = h5py.File('data/cvs_v3_processed/np_store.h5','w')
+    df_store = pd.HDFStore('data/cvs_v3_processed/df_store.h5')
+    files = [file for file in os.listdir('data/cvs_v3/') if file != '_SUCCESS']
+    print(files)
+
+    t0 = time.time()
+    print('t0:', t0)
+
+    # loop through all files
+    for i in range(0, 1):
+    # for i in range(0, len(files)):
+        print(i)
+        print(time.time())
+
+        # import and definitions
+        df = read_single_json_data(num_file=i,folder='data/cvs_v3/')  # read in df
+        file_data = np.zeros(shape=(len(df),max_roles,100))
+        job_embed_dict = read_ontology_data('job-word2vec',file_type='pkl')
+        last_roles = []
+
+        # loop through rows
+        for j in range(0,len(df)):
+            print(j)
+            person_emp_list = df['employment_history_norm'][j]
+            if isinstance(person_emp_list, list):
+                if len(person_emp_list) > 0:
+
+                    # loop through roles
+                    for k in range(0,len(person_emp_list)):
+                        idx = len(person_emp_list) - k - 1
+                        # append last role
+                        if k == 0:
+                            if 'title_norm' in person_emp_list[k]:
+                                last_roles.append(person_emp_list[k]['title_norm'])
+                            else:
+                                continue
+                        # numpy array
+                        if 'title_norm' in person_emp_list[k]:
+                            norm_title = person_emp_list[k]['title_norm']
+                            file_data[j,idx,:] = job_embed_dict[norm_title]
+
+
+        key = 'file_' + str(i)
+
+        # save numpy array
+        np_store.create_dataset(key, data=file_data)
+
+        # save df
+        last_roles_df = pd.DataFrame(last_roles,columns=['last_role'])
+        extra_df = pd.concat([df['skills'],last_roles_df],axis=1)
+        df_store.append(key,extra_df,data_columns=True)
+
+    # time
+    t1 = time.time()
+    print('Total time taken:', t1 - t0)
+
+
 
 # function to read in the h5
 def read_h5_files(file_name, num_files):
@@ -244,14 +324,9 @@ if __name__ == "__main__":
     # test_dict = read_ontology_data('skill-profiles',file_type='pkl')
     # print(len(test_dict['team secretary'][0]))
 
-    skills_pt_to_dict('data/ontology/skill-pt/skill_pt_dict.pkl')
+    # skills_pt_to_dict('data/ontology/skill-pt/skill_pt_dict.pkl')
 
-
-
-
-
-
-    # save_processed_dfs('test_file')
+    save_processed_dfs_nemo()
     # df = pd.read_hdf('data/cvs_v2_processed/h5_cvs.h5','0')
     # store = pd.HDFStore('data/cvs_v2_processed/h5_cvs.h5')
     # print(df.shape)

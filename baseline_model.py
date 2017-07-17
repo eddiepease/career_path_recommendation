@@ -15,7 +15,7 @@ from sklearn.linear_model import LogisticRegression
 
 from read_data import read_ontology_data,read_embeddings_json
 from split_data import create_train_test_set, create_train_test_set_stratified
-from embeddings.job_embedding import create_job_embedding,create_cv_skill_embeddings
+from embeddings.job_embedding import create_job_embedding,create_cv_skill_embeddings,create_weighted_cv_skill_embeddings
 
 
 # class for a baseline model
@@ -129,11 +129,18 @@ class BaselineModel():
             normalized_title_label = df.iloc[i, lab_loc]
             skills = df.iloc[i,skill_loc]
 
-            if include_cv_skills:
+            if include_cv_skills == 'whole':
                 # if no job_title in CV or job title is not in skills profile for either position
                 if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
 
                     features_dict[i] = create_cv_skill_embeddings(skills,skill_embeddings_dict)
+                    labels.append(job_dict[normalized_title_label])
+
+            elif include_cv_skills == 'half':
+                # if no job_title in CV or job title is not in skills profile for either position
+                if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
+
+                    features_dict[i] = create_weighted_cv_skill_embeddings(skills, skill_embeddings_dict, normalized_title_feat)
                     labels.append(job_dict[normalized_title_label])
 
             else:
@@ -164,8 +171,8 @@ class BaselineModel():
         #generate
         if embedding:
             self.embedding, self.ordered_job_title = create_job_embedding(embedding_size=100)
-            X_train, y_train = self.create_embedding_features(self.train, include_cv_skills=True)
-            X_test, y_test = self.create_embedding_features(self.test,include_cv_skills=True)
+            X_train, y_train = self.create_embedding_features(self.train, include_cv_skills='half')
+            X_test, y_test = self.create_embedding_features(self.test,include_cv_skills='half')
         else:
             X_train, y_train = self.create_bag_of_skills_features(self.train, include_cv_skills=True, tf_idf=weighted)
             X_test, y_test = self.create_bag_of_skills_features(self.test, include_cv_skills=True, tf_idf=weighted)
@@ -296,14 +303,14 @@ class BaselineModel():
 if __name__ == "__main__":
 
     # create train/test set
-    train, test = create_train_test_set_stratified(n_files=2,threshold=1)
+    train, test = create_train_test_set_stratified(n_files=1,threshold=1)
 
-    # # run the Baseline Model
-    # folder = 'cv_skill_trial'
-    # model = BaselineModel(train,test)
-    # model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
-    # mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)
-    # print('MPR: ', mpr)
+    # run the Baseline Model
+    folder = 'cv_skill_trial'
+    model = BaselineModel(train,test)
+    model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
+    mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)
+    print('MPR: ', mpr)
 
 
     # ecoc.save_transformed_data(embedding=True,weighted=False,save_name=folder)

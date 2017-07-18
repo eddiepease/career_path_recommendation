@@ -143,9 +143,6 @@ def save_processed_dfs_baseline(save_name):
 
 
 # function to save nemo data into h5
-# TODO: test
-# TODO: how to deal with missing data - at the moment the df and numpy array inconsistent lengths
-# TODO: think how this works with stratified approach
 def save_processed_dfs_nemo(max_roles=10):
 
     # define hdf5
@@ -158,7 +155,7 @@ def save_processed_dfs_nemo(max_roles=10):
     print('t0:', t0)
 
     # loop through all files
-    for i in range(0, 1):
+    for i in range(0, 2):
     # for i in range(0, len(files)):
         print(i)
         print(time.time())
@@ -168,6 +165,7 @@ def save_processed_dfs_nemo(max_roles=10):
         file_data = np.zeros(shape=(len(df),max_roles,100))
         job_embed_dict = read_ontology_data('job-word2vec',file_type='pkl')
         last_roles = []
+        last_roles_idx = []
 
         # loop through rows
         for j in range(0,len(df)):
@@ -183,6 +181,7 @@ def save_processed_dfs_nemo(max_roles=10):
                         if k == 0:
                             if 'title_norm' in person_emp_list[k]:
                                 last_roles.append(person_emp_list[k]['title_norm'])
+                                last_roles_idx.append(j)
                             else:
                                 continue
                         # numpy array
@@ -193,13 +192,20 @@ def save_processed_dfs_nemo(max_roles=10):
 
         key = 'file_' + str(i)
 
+        # save df
+        last_roles_df = pd.DataFrame(last_roles, columns=['normalised_title_label'])
+        df = df.iloc[last_roles_idx,:].reset_index(drop=True)
+        extra_df = pd.concat([df['skills'], last_roles_df], axis=1)
+        extra_df.to_hdf(df_store,key=key)
+        # df_store.append(key, extra_df, data_columns=True)
+
         # save numpy array
+        print(file_data.shape)
+        file_data = file_data[last_roles_idx,:,:]
+        print(file_data.shape)
         np_store.create_dataset(key, data=file_data)
 
-        # save df
-        last_roles_df = pd.DataFrame(last_roles,columns=['last_role'])
-        extra_df = pd.concat([df['skills'],last_roles_df],axis=1)
-        df_store.append(key,extra_df,data_columns=True)
+    np_store.close()
 
     # time
     t1 = time.time()
@@ -208,7 +214,7 @@ def save_processed_dfs_nemo(max_roles=10):
 
 
 # function to read in the h5
-def read_h5_files(file_name, num_files):
+def read_h5_files_baseline(file_name, num_files):
 
     df_result = pd.DataFrame()
     filename = 'data/cvs_v2_processed/' + file_name + '.h5'
@@ -221,6 +227,37 @@ def read_h5_files(file_name, num_files):
         df_result = pd.concat([df_result, df]).reset_index(drop=True)
 
     return df_result
+
+# function to read in the h5
+def read_h5_files_nemo(np_file_name, df_file_name, num_files):
+
+    folder = 'data/cvs_v3_processed/'
+
+    # prepare df
+    df_fullpath = folder + df_file_name + '.h5'
+    df_result = pd.DataFrame()
+    # df_f = h5py.File(df_filename, 'r')
+
+    # prepare np
+    np_fullpath = folder + np_file_name + '.h5'
+    np_list = []
+    np_f = h5py.File(np_fullpath, 'r')
+
+    for i in range(0,num_files):
+        key = 'file_' + str(i)
+
+        # df
+        df = pd.read_hdf(df_fullpath, key)
+        df_result = pd.concat([df_result, df]).reset_index(drop=True)
+
+        # np
+        np_list.append(np_f[key][:])
+
+    # tidy up
+    np_f.close()
+    np_result = np.concatenate(np_list)
+
+    return np_result,df_result
 
 
 #######################
@@ -299,55 +336,8 @@ def skills_pt_to_dict(save_location):
 
 if __name__ == "__main__":
 
-    # # start time
-    # t0 = time.time()
-    #
-    # file_name = 'h5_cvs'
-    # df = read_h5_files(file_name,num_files=1)
-    #
-    # print(df.shape)
 
-    # filename = 'data/cvs_v2_processed/test_file.h5'
-    # f = h5py.File(filename, 'r')
-    # keys = [key for key in f.keys()]
-    # print(keys)
-    # # ['31172', '31607', '31635', '31642', '36334', '36541', '36718', '36852', '57293', '57486', '57568', '62617','62666', '67734', '67747', '68015', '68355', '78549']
-
-    # List all groups
-    # print("Keys: %s" % f.keys())
-    # a_group_key = f.keys()[0]
-
-    # test_df = read_ontology_data('skill-profiles', file_type='csv')
-    # print(len(test_df[test_df['title'] == 'team secretary']))
-    #
-    #
-    # test_dict = read_ontology_data('skill-profiles',file_type='pkl')
-    # print(len(test_dict['team secretary'][0]))
-
-    # skills_pt_to_dict('data/ontology/skill-pt/skill_pt_dict.pkl')
-
-    save_processed_dfs_nemo()
-    # df = pd.read_hdf('data/cvs_v2_processed/h5_cvs.h5','0')
-    # store = pd.HDFStore('data/cvs_v2_processed/h5_cvs.h5')
-    # print(df.shape)
-
-
-
-    # # stuff
-    # # df = read_json_data('data/cvs/')
-    # # skills_profile_to_dict(save_location='data/ontology/skill-profiles/skill_profile_dict.pkl')
-    # test_dict = read_ontology_data('skill-profiles', file_type='pkl')
-    # # print(test_dict)
-    #
-    # # pickle.dump(df, open('data/all_csv.pkl','wb'))
-    # #
-    # #
-    # #
-    # #
-    # # # end time
-    # # t1 = time.time()
-    # #
-    # # duration = round(t1 - t0, 2)
-    # # print('Duration is', duration, 'seconds')
-
-
+    # save_processed_dfs_nemo()
+    np_test, df_test = read_h5_files_nemo(np_file_name='np_store',df_file_name='df_store',num_files=1)
+    print(df_test.shape)
+    print(np_test.shape)

@@ -1,14 +1,15 @@
 import os
+import h5py
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from collections import Counter
 
-from read_data import read_h5_files,read_ontology_data
+from read_data import read_h5_files_nemo,read_h5_files_baseline,read_ontology_data
 from eda import ExploratoryDataAnalysis
 
 
-def remove_infrequent_labels(df,threshold):
+def remove_infrequent_labels_df(df,threshold):
     # setup
     labels = df['normalised_title_label']
 
@@ -19,14 +20,14 @@ def remove_infrequent_labels(df,threshold):
     remaining_indices = list(set(list(range(0, len(labels)))) - set(low_freq_indices))
     df_trans = df.iloc[remaining_indices, :].reset_index(drop=True)
 
-    return df_trans
+    return df_trans,remaining_indices
 
 # function to create random assigned train/test split
 def create_train_test_set(n_files,n_seed=1, train_frac=0.8, threshold=1):
 
     np.random.seed(n_seed) # set random seed
-    df = read_h5_files(file_name='h5_cvs',num_files=n_files) # read in df
-    df_trans = remove_infrequent_labels(df,threshold)
+    df = read_h5_files_baseline(file_name='h5_cvs',num_files=n_files) # read in df
+    df_trans,_ = remove_infrequent_labels_df(df,threshold)
 
     msk = np.random.rand(len(df_trans)) < train_frac
     train = df_trans[msk].reset_index(drop=True)
@@ -35,12 +36,12 @@ def create_train_test_set(n_files,n_seed=1, train_frac=0.8, threshold=1):
     return train, test
 
 # function to create a stratified train/test split
-def create_train_test_set_stratified(n_files,n_seed=1,train_frac=0.8,threshold=1):
-    print('Creating train/test set...')
+def create_train_test_set_stratified_baseline(n_files,n_seed=1,train_frac=0.8,threshold=1):
+    print('Creating baseline train/test set...')
 
     # read in h5 files
-    df = read_h5_files(file_name='h5_cvs',num_files=n_files) # read in df
-    df_trans = remove_infrequent_labels(df,threshold)
+    df = read_h5_files_baseline(file_name='h5_cvs',num_files=n_files) # read in df
+    df_trans,_ = remove_infrequent_labels_df(df,threshold)
 
     # stratified split
     job_labels = df_trans['normalised_title_label']
@@ -48,6 +49,24 @@ def create_train_test_set_stratified(n_files,n_seed=1,train_frac=0.8,threshold=1
                                       stratify=job_labels)
 
     return train, test
+
+# function to create a stratified train/test split for nemo
+def create_train_test_set_stratified_nemo(n_files,n_seed=1,train_frac=0.8,threshold=1):
+    print('Creating nemo train/test set...')
+
+    # read in h5 files
+    array, df = read_h5_files_nemo(np_file_name='np_store',df_file_name='df_store',num_files=n_files) # read in data
+    df_trans,idx = remove_infrequent_labels_df(df,threshold)
+    array_trans = array[idx,:,:]
+
+    # stratified split
+    job_labels = df_trans['normalised_title_label']
+    df_train,df_test,_,_ = train_test_split(df_trans,job_labels,train_size=train_frac,random_state=n_seed,
+                                      stratify=job_labels)
+    np_train, np_test, _, _ = train_test_split(array_trans, job_labels, train_size=train_frac, random_state=n_seed,
+                                               stratify=job_labels)
+
+    return df_train, df_test, np_train, np_test
 
 
 def plot_comparison_graphs(object_1,object_2,xlabel_1,xlabel_2,title,save_location):
@@ -142,9 +161,11 @@ def compare_cv_dfs(df_1,df_2,folder_name):
 
 if __name__ == "__main__":
 
-    # TODO: get this script working
-    train,test = create_train_test_set_stratified(n_files=1)
-    compare_cv_dfs(train,test,folder_name='1_sample')
+    # TODO: get the auto plot comparisons to work
+
+
+    df_train,df_test, np_train, np_test = create_train_test_set_stratified_nemo(n_files=1)
+    # compare_cv_dfs(train,test,folder_name='1_sample')
 
     # train,test = create_train_test_set_stratified(n_files=1)
     # print(train.shape)

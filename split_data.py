@@ -1,11 +1,13 @@
 import os
+import time
 import h5py
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from collections import Counter
 
-from read_data import read_h5_files_nemo,read_h5_files_baseline,read_ontology_data
+from read_data import read_h5_files_nemo,read_h5_files_baseline,read_ontology_data,read_single_json_data
 from eda import ExploratoryDataAnalysis
 
 
@@ -162,9 +164,10 @@ def compare_cv_dfs(df_1,df_2,folder_name):
 if __name__ == "__main__":
 
     # TODO: get the auto plot comparisons to work
-
-
     df_train,df_test, np_train, np_test = create_train_test_set_stratified_nemo(n_files=1)
+    print(df_train.shape)
+    print(np_train.shape)
+
     # compare_cv_dfs(train,test,folder_name='1_sample')
 
     # train,test = create_train_test_set_stratified(n_files=1)

@@ -14,7 +14,7 @@ from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 
 from read_data import read_ontology_data,read_embeddings_json
-from split_data import create_train_test_set, create_train_test_set_stratified
+from split_data import create_train_test_set, create_train_test_set_stratified_baseline
 from embeddings.job_embedding import create_job_embedding,create_cv_skill_embeddings,create_weighted_cv_skill_embeddings
 
 
@@ -303,7 +303,7 @@ class BaselineModel():
 if __name__ == "__main__":
 
     # create train/test set
-    train, test = create_train_test_set_stratified(n_files=1,threshold=1)
+    train, test = create_train_test_set_stratified_baseline(n_files=1,threshold=1)
 
     # run the Baseline Model
     folder = 'cv_skill_trial'

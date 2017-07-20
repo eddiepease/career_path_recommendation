@@ -96,6 +96,7 @@ def save_processed_dfs_baseline(save_name):
 
 # function which transforms the cvs for the nemo model
 # the transformed data is saved into h5 storage
+# TODO: alter this file to save skills embedding too.
 def save_processed_dfs_nemo(max_roles=10):
 
     # define hdf5

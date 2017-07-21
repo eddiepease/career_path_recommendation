@@ -9,7 +9,7 @@ from wordcloud import WordCloud
 from fuzzywuzzy import fuzz
 import gmplot
 
-from read_data import CVJobNormalizer,read_all_json_data,read_ontology_data,read_general_csv
+from read_data import read_all_json_data,read_ontology_data,read_general_csv
 
 
 # class used for any exploratory data analysis - both transformation and visualization methods

@@ -5,41 +5,8 @@ import pickle
 import numpy as np
 import pandas as pd
 
-from read_data import read_single_json_data,read_ontology_data
-from job_title_normalizer.ad_parsing import JobTitleNormalizer
-
-###############
-# helper objects/functions
-###############
-
-class CVJobNormalizer():
-    def __init__(self):
-
-        # read in necessary files
-        self.fnoun_plural = pickle.load(open("job_title_normalizer/data/fnoun_plural_dict.pkl", "rb"), encoding='latin1')
-        self.fnoun_set = pickle.load(open("job_title_normalizer/data/fnoun_set.pkl", "rb"), encoding='latin1')
-        self.spellchecker = pickle.load(open("job_title_normalizer/data/spellchecker_dict.pkl", "rb"), encoding='latin1')
-        self.stopwords = pickle.load(open("job_title_normalizer/data/stopwords.pkl", "rb"), encoding='latin1')
-        self.title = pickle.load(open("job_title_normalizer/data/title_dict.pkl", "rb"), encoding='latin1')
-        self.token_sub = pickle.load(open("job_title_normalizer/data/token_sub_dict.pkl", "rb"), encoding='latin1')
-        self.us_uk_spellchecker = pickle.load(open("job_title_normalizer/data/us_uk_spellchecker_dict.pkl", "rb"),
-                                         encoding='latin1')
-
-        # normalizer
-        self.job_title_normalizer = JobTitleNormalizer(self.stopwords, self.us_uk_spellchecker, self.spellchecker,
-                                                       self.fnoun_plural, self.title, self.token_sub, self.fnoun_set)
-
-    def normalized_job(self, df, n_row, job_num=0):
-        if isinstance(df['employment_history'][n_row],list):
-            if len(df['employment_history'][n_row]) > 0:
-                try:
-                    raw_title = df['employment_history'][n_row][job_num]['raw_job_title']
-                    normalized_title = self.job_title_normalizer.process(raw_title)['title_norm']
-                    return normalized_title
-                except KeyError:
-                    pass
-                except IndexError:
-                    pass
+from read_data import read_single_json_data,read_ontology_data,read_embeddings_json
+from baseline_model import BaselineModel
 
 
 #################
@@ -100,15 +67,17 @@ def save_processed_dfs_baseline(save_name):
 def save_processed_dfs_nemo(max_roles=10):
 
     # define hdf5
-    np_store = h5py.File('data/cvs_v3_processed/np_store.h5','w')
-    df_store = pd.HDFStore('data/cvs_v3_processed/df_store.h5')
+    job_store = h5py.File('data/cvs_v3_processed/job_store.h5','w')
+    skill_store = h5py.File('data/cvs_v3_processed/skill_store.h5', 'w')
+    label_store = h5py.File('data/cvs_v3_processed/label_store.h5', 'w')
+
     files = [file for file in os.listdir('data/cvs_v3/') if file != '_SUCCESS']
-    print(files)
+    embedding_size = 100
 
     t0 = time.time()
     print('t0:', t0)
 
-    # loop through all files
+    # job store
     for i in range(0, 2):
     # for i in range(0, len(files)):
         print(i)
@@ -123,7 +92,6 @@ def save_processed_dfs_nemo(max_roles=10):
 
         # loop through rows
         for j in range(0,len(df)):
-            print(j)
             person_emp_list = df['employment_history_norm'][j]
             if isinstance(person_emp_list, list):
                 if len(person_emp_list) > 0:
@@ -146,20 +114,44 @@ def save_processed_dfs_nemo(max_roles=10):
 
         key = 'file_' + str(i)
 
-        # save df
-        last_roles_df = pd.DataFrame(last_roles, columns=['normalised_title_label'])
-        df = df.iloc[last_roles_idx,:].reset_index(drop=True)
-        extra_df = pd.concat([df['skills'], last_roles_df], axis=1)
-        extra_df.to_hdf(df_store,key=key)
-        # df_store.append(key, extra_df, data_columns=True)
+        # labels
+        bm = BaselineModel(file_data,file_data)
+        _,_, job_dict,_ = bm.prepare_feature_generation()
+        label_array = np.array([job_dict[job] for job in last_roles])
 
-        # save numpy array
-        print(file_data.shape)
+        # skills
+        X_skill_list = []
+        file_name = 'data/ontology/skill-word2vec/data/skill_embeddings.json'
+        skill_embeddings_dict = read_embeddings_json(file_name)
+
+        for person in list(df['skills']):
+            individual_skills = []
+            for skill in person:
+                try:
+                    individual_skills.append(skill_embeddings_dict[skill])
+                except KeyError:
+                    pass
+
+            if len(individual_skills) > 0:
+                max_pool_skill = np.max(np.array(individual_skills), axis=0)  # max pooling operation
+            else:
+                max_pool_skill = np.zeros(shape=(embedding_size,))
+            X_skill_list.append(max_pool_skill)
+
+        X_skill = np.array(X_skill_list)
+
+        # slice numpy arrays
         file_data = file_data[last_roles_idx,:,:]
-        print(file_data.shape)
-        np_store.create_dataset(key, data=file_data)
+        X_skill = X_skill[last_roles_idx,:]
 
-    np_store.close()
+        # save
+        skill_store.create_dataset(key,data=X_skill)
+        job_store.create_dataset(key, data=file_data)
+        label_store.create_dataset(key, data=label_array)
+
+    skill_store.close()
+    job_store.close()
+    label_store.close()
 
     # time
     t1 = time.time()

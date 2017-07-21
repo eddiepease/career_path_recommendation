@@ -6,9 +6,41 @@ import numpy as np
 import pandas as pd
 import pickle
 
+from job_title_normalizer.ad_parsing import JobTitleNormalizer
+
 #################
 # helper objects + functions
 ################
+
+class CVJobNormalizer():
+    def __init__(self):
+
+        # read in necessary files
+        self.fnoun_plural = pickle.load(open("job_title_normalizer/data/fnoun_plural_dict.pkl", "rb"), encoding='latin1')
+        self.fnoun_set = pickle.load(open("job_title_normalizer/data/fnoun_set.pkl", "rb"), encoding='latin1')
+        self.spellchecker = pickle.load(open("job_title_normalizer/data/spellchecker_dict.pkl", "rb"), encoding='latin1')
+        self.stopwords = pickle.load(open("job_title_normalizer/data/stopwords.pkl", "rb"), encoding='latin1')
+        self.title = pickle.load(open("job_title_normalizer/data/title_dict.pkl", "rb"), encoding='latin1')
+        self.token_sub = pickle.load(open("job_title_normalizer/data/token_sub_dict.pkl", "rb"), encoding='latin1')
+        self.us_uk_spellchecker = pickle.load(open("job_title_normalizer/data/us_uk_spellchecker_dict.pkl", "rb"),
+                                         encoding='latin1')
+
+        # normalizer
+        self.job_title_normalizer = JobTitleNormalizer(self.stopwords, self.us_uk_spellchecker, self.spellchecker,
+                                                       self.fnoun_plural, self.title, self.token_sub, self.fnoun_set)
+
+    def normalized_job(self, df, n_row, job_num=0):
+        if isinstance(df['employment_history'][n_row],list):
+            if len(df['employment_history'][n_row]) > 0:
+                try:
+                    raw_title = df['employment_history'][n_row][job_num]['raw_job_title']
+                    normalized_title = self.job_title_normalizer.process(raw_title)['title_norm']
+                    return normalized_title
+                except KeyError:
+                    pass
+                except IndexError:
+                    pass
+
 
 def preprocessing(df):
     # split into 2 data frames
@@ -79,14 +111,9 @@ def read_h5_files_baseline(file_name, num_files):
     return df_result
 
 # function to read in the h5
-def read_h5_files_nemo(np_file_name, df_file_name, num_files):
+def read_h5_files_nemo(np_file_name, num_files):
 
     folder = 'data/cvs_v3_processed/'
-
-    # prepare df
-    df_fullpath = folder + df_file_name + '.h5'
-    df_result = pd.DataFrame()
-    # df_f = h5py.File(df_filename, 'r')
 
     # prepare np
     np_fullpath = folder + np_file_name + '.h5'
@@ -95,19 +122,13 @@ def read_h5_files_nemo(np_file_name, df_file_name, num_files):
 
     for i in range(0,num_files):
         key = 'file_' + str(i)
-
-        # df
-        df = pd.read_hdf(df_fullpath, key)
-        df_result = pd.concat([df_result, df]).reset_index(drop=True)
-
-        # np
         np_list.append(np_f[key][:])
 
     # tidy up
     np_f.close()
     np_result = np.concatenate(np_list)
 
-    return np_result,df_result
+    return np_result
 
 
 #######################

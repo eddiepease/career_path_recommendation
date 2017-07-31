@@ -10,10 +10,17 @@ from split_data import create_train_test_set_stratified_nemo
 
 # TODO: alter to take account of stratified split
 class NEMO(BaselineModel):
-    def __init__(self, n_files):
-        self.X_skill_train = read_h5_files_nemo('skill_store',num_files=n_files)
-        self.X_job_train = read_h5_files_nemo('job_store', num_files=n_files)
-        self.y_train = read_h5_files_nemo('label_store', num_files=n_files)
+    def __init__(self, n_files,threshold=1):
+        self.threshold = threshold
+        self.X_skill_train,self.X_skill_test = create_train_test_set_stratified_nemo(data_file_name='skill_store',
+                                                                                     n_files=n_files,
+                                                                                     threshold=self.threshold)
+        self.X_job_train, self.X_job_test = create_train_test_set_stratified_nemo(data_file_name='job_store',
+                                                                                      n_files=n_files,
+                                                                                      threshold=self.threshold)
+        self.y_train, self.y_test = create_train_test_set_stratified_nemo(data_file_name='label_store',
+                                                                                  n_files=n_files,
+                                                                                  threshold=self.threshold)
         self.embedding_size = 100
         BaselineModel.__init__(self, self.X_skill_train, self.X_skill_train)
         _,_,self.job_dict,self.reverse_job_dict = self.prepare_feature_generation()
@@ -23,10 +30,11 @@ class NEMO(BaselineModel):
     def generate_random_batches(self, X_skill, X_job, y, batch_size):
         idx = np.random.randint(0,len(X_job),batch_size)
         X_skill_batch = X_skill[idx,:]
-        X_job_batch = X_job[idx,:]
-        y_batch = y[idx,:]
+        X_job_batch = X_job[idx,:,:]
+        y_batch = np.expand_dims(y[idx,],axis=1)
         return X_skill_batch,X_job_batch,y_batch
 
+    # TODO: change sampled softmax according to how many
     def compute_graph(self):
         # define the compute graph with everything as 'self'
         # need to include a definition of mpr here
@@ -58,8 +66,8 @@ class NEMO(BaselineModel):
         # decoder
         ###########
 
-        self.job_inputs = tf.placeholder(tf.float32, shape=(self.batch_size, self.max_roles - 1, self.embedding_size))
-        self.job_true = tf.placeholder(tf.int32,shape=(self.batch_size, 1))
+        self.job_inputs = tf.placeholder(tf.float32, shape=(self.batch_size, self.max_roles, self.embedding_size))
+        self.job_true = tf.placeholder(tf.int32,shape=(self.batch_size,1))
 
         self.encoder_output = tf.expand_dims(self.encoder_output,axis=1)
         self.encoded_job_inputs = tf.concat([self.encoder_output,self.job_inputs],axis=1)
@@ -102,10 +110,20 @@ class NEMO(BaselineModel):
 
         self.train_step = tf.train.AdamOptimizer().minimize(self.train_loss)
 
+        # testing
+        self.y_true_one_hot = tf.squeeze(tf.one_hot(self.job_true,self.n_unique_jobs),axis=1)
+        self.test_loss = tf.nn.softmax_cross_entropy_with_logits(labels=self.y_true_one_hot,logits=self.logits) # shape: [batch_size,]
+        self.test_probs = tf.nn.softmax(self.logits) # shape: [batch_size x unique_jobs]
+
         return self
 
-    # TODO: test this
-    def train(self, n_iter, print_freq):
+    def nemo_mpr(self,y_pred_proba,y_true,class_labels):
+        mpr = np.mean([np.where(class_labels[y_pred_proba[i].argsort()[::-1]] == y_true[i])[0][0] / len(class_labels)
+                       for i in range(len(y_true))
+                       if y_true[i] in class_labels])
+        return mpr
+
+    def train_nemo_model(self, n_iter, print_freq):
         # train the model using a session
         self.sess.run(tf.global_variables_initializer())
 
@@ -114,14 +132,13 @@ class NEMO(BaselineModel):
                                                                              self.X_job_train,
                                                                              self.y_train,
                                                                              batch_size=self.batch_size)
-            train_feed_dict = {self.max_pool_skills: X_job_batch,
+            train_feed_dict = {self.max_pool_skills: X_skill_batch,
                                self.job_inputs: X_job_batch,
                                self.job_true: y_batch}
-            self.train_step.run(train_feed_dict)
+            self.sess.run([self.train_step],train_feed_dict)
 
-
-            if iter % print_freq:
-                train_loss = self.train_loss.eval(train_feed_dict)
+            if iter % print_freq == 0:
+                train_loss = self.sess.run(self.train_loss,train_feed_dict)
                 print('Train Loss at', iter, ": ", train_loss)
 
     # TODO: complete this
@@ -136,4 +153,13 @@ class NEMO(BaselineModel):
 
 if __name__ == "__main__":
 
-    nemo = NEMO(n_files=1)
+    model = NEMO(n_files=1)
+    # nemo.train_nemo_model(n_iter=1000,print_freq=100)
+
+    # test mpr
+    test_array = np.random.rand(10,100)
+    y_true = np.random.randint(0,100,size=(10,))
+    class_labels = np.array(range(100))
+
+    mpr = model.nemo_mpr(test_array,y_true,class_labels)
+    print('MPR is: ', mpr)

@@ -9,7 +9,7 @@ from wordcloud import WordCloud
 from fuzzywuzzy import fuzz
 import gmplot
 
-from read_data import read_all_json_data,read_ontology_data,read_general_csv
+from read_data import read_all_json_data,read_ontology_data,read_general_csv, CVJobNormalizer
 
 
 # class used for any exploratory data analysis - both transformation and visualization methods
@@ -224,24 +224,37 @@ if __name__ == '__main__':
 
     # read data
     df = read_all_json_data(folder='data/cvs_v3/')
+    print(df.columns)
 
     # transform data
     eda = ExploratoryDataAnalysis(df,job_title_location='data/')
     # eda.most_recent_job_title(file_name='cvs_v3_job_freq')
     # eda.most_recent_job_category(job_title_filename='cvs_v3_job_freq')
     # eda.number_of_roles()
-    eda.number_missing_job_titles()
-
-
-    # plot data
-    save_location = 'figures/whole_jobsite_data/cvs_v3/'
-    # eda.generate_word_cloud(file='job_wordcloud.png',title='Job Title Wordcloud',save_location=save_location)
-    # eda.generate_bar_chart(xlabel_name='Normalized count')
-    eda.generate_histogram(xlabel_name='Number of missing roles')
-    plt.savefig(save_location + 'number_missing_roles.png')
-
-    # # transform data
-    # eda = ExploratoryDataAnalysis(df,job_title_location='')
     # eda.work_experience_years()
-    # eda.generate_histogram()
-    # plt.savefig('test.png')
+
+    # map plot
+    save_location = 'figures/whole_jobsite_data/cvs_v3/'
+    eda.location(file_location=save_location + 'cv_map.html')
+
+    # # plot data
+    # save_location = 'figures/whole_jobsite_data/cvs_v3/'
+    # # eda.generate_word_cloud(file='job_wordcloud_test.png',title='Job Title Wordcloud',save_location=save_location)
+    # eda.generate_bar_chart(xlabel_name='Normalized count')
+    # plt.ylabel('Industry')
+    # plt.title('Bar Chart of Job Categories')
+    # plt.tight_layout()
+    # plt.savefig(save_location + 'recent_job_category_test.png')
+
+
+
+    # eda.generate_histogram(xlabel_name='Number of years experience')
+    # plt.ylabel('Frequency')
+    # plt.title('Histogram of Years of Work Experience')
+    # plt.savefig(save_location + 'years_experience.png')
+    #
+    # # # transform data
+    # # eda = ExploratoryDataAnalysis(df,job_title_location='')
+    # # eda.work_experience_years()
+    # # eda.generate_histogram()
+    # # plt.savefig('test.png')

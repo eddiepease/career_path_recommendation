@@ -82,7 +82,7 @@ def read_single_json_data(num_file,folder):
 def read_all_json_data(folder):
     # define variables
     data = []
-    files = os.listdir(folder)[:1]
+    files = os.listdir(folder)[:5]
 
     # loop through files
     for file in files:
@@ -96,16 +96,15 @@ def read_all_json_data(folder):
     return df
 
 # function to read in the h5
-def read_h5_files_baseline(file_name, num_files):
+def read_h5_files_baseline(folder_name, file_name, num_files):
 
     df_result = pd.DataFrame()
-    filename = 'data/cvs_v2_processed/' + file_name + '.h5'
+    filename = folder_name + file_name + '.h5'
     f = h5py.File(filename, 'r')
-    keys = [key for key in f.keys()]
 
     for i in range(0,num_files):
-        key = keys[i]
-        df = pd.read_hdf('data/cvs_v2_processed/' + file_name + '.h5', key)
+        key = 'file_' + str(i)
+        df = pd.read_hdf(folder_name + file_name + '.h5', key)
         df_result = pd.concat([df_result, df]).reset_index(drop=True)
 
     return df_result

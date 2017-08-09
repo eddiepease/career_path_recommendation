@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.naive_bayes import GaussianNB
 from sklearn.svm import SVC
-from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
 
 from read_data import read_ontology_data,read_embeddings_json
 from split_data import create_train_test_set, create_train_test_set_stratified_baseline
@@ -136,12 +136,12 @@ class BaselineModel():
                     features_dict[i] = create_cv_skill_embeddings(skills,skill_embeddings_dict)
                     labels.append(job_dict[normalized_title_label])
 
-            elif include_cv_skills == 'half':
-                # if no job_title in CV or job title is not in skills profile for either position
-                if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
-
-                    features_dict[i] = create_weighted_cv_skill_embeddings(skills, skill_embeddings_dict, normalized_title_feat)
-                    labels.append(job_dict[normalized_title_label])
+            # elif include_cv_skills == 'half':
+            #     # if no job_title in CV or job title is not in skills profile for either position
+            #     if normalized_title_feat in self.ordered_job_title and normalized_title_label in self.ordered_job_title:
+            #
+            #         features_dict[i] = create_weighted_cv_skill_embeddings(skills, skill_embeddings_dict, normalized_title_feat)
+            #         labels.append(job_dict[normalized_title_label])
 
             else:
                 # if no job_title in CV or job title is not in skills profile for either position
@@ -171,8 +171,8 @@ class BaselineModel():
         #generate
         if embedding:
             self.embedding, self.ordered_job_title = create_job_embedding(embedding_size=100)
-            X_train, y_train = self.create_embedding_features(self.train, include_cv_skills='half')
-            X_test, y_test = self.create_embedding_features(self.test,include_cv_skills='half')
+            X_train, y_train = self.create_embedding_features(self.train, include_cv_skills='whole')
+            X_test, y_test = self.create_embedding_features(self.test,include_cv_skills='whole')
         else:
             X_train, y_train = self.create_bag_of_skills_features(self.train, include_cv_skills=True, tf_idf=weighted)
             X_test, y_test = self.create_bag_of_skills_features(self.test, include_cv_skills=True, tf_idf=weighted)
@@ -191,7 +191,7 @@ class BaselineModel():
         # self.plot_job_frequency(y_train, save_name=path+'y_train_histogram.png')
 
     # load features and labels, either from saved or generate from
-    def load_transformed_data(self,save_name,remove_rare):
+    def load_transformed_data(self,save_name):
 
         # load data
         path = 'data/' + save_name + '/'
@@ -238,7 +238,7 @@ class BaselineModel():
     def train_and_eval_model(self, model_type, save_name):
 
         # load data into object
-        self.load_transformed_data(save_name,remove_rare=True)
+        self.load_transformed_data(save_name)
 
         # train model
         print('Training model...')
@@ -247,8 +247,8 @@ class BaselineModel():
             clf = GaussianNB()
         elif model_type == 'svm':
             clf = SVC(probability=True)
-        elif model_type == 'lr':
-            clf = LogisticRegression()
+        elif model_type == 'mnb':
+            clf = MultinomialNB()
 
         clf.fit(self.X_train,self.y_train)
         t1 = time.time()
@@ -262,51 +262,13 @@ class BaselineModel():
 
 
 
-
-# class MarkovModel():
-#     def __init__(self, train, test):
-#         self.train = train
-#         self.test = test
-#         self.base_model = BaselineModel(self.train,self.test)
-#
-#     def create_transition_matrix(self):
-#
-#         _,_,job_dict, reverse_job_dict = self.base_model.prepare_feature_generation()
-#         n_jobs = len(job_dict.keys())
-#
-#         # create empty numpy array
-#         trans_matrix = np.zeros(shape=(n_jobs,n_jobs),dtype=np.float32)
-#         previous_job_list = list(self.train['normalised_title_feat'])
-#         current_job_list = list(self.train['normalised_title_label'])
-#
-#         # loop through all training set
-#         for i in range(0,len(self.train)):
-#             pre_job = previous_job_list[i]
-#             curr_job = current_job_list[i]
-#             if pre_job in job_dict and curr_job in job_dict:
-#                 pre_idx = job_dict[previous_job_list[i]]
-#                 curr_idx = job_dict[current_job_list[i]]
-#                 trans_matrix[pre_idx,curr_idx] += 1
-#
-#         trans_matrix = trans_matrix / trans_matrix.sum()
-#
-#         return trans_matrix
-#
-#     # TODO: evaluate the MPR of the test set
-#     def evaluate(self):
-#         pass
-
-
-
-
-
 if __name__ == "__main__":
 
     # create train/test set
-    train, test = create_train_test_set_stratified_baseline(n_files=1,threshold=1)
+    train, test = create_train_test_set_stratified_baseline(n_files=20,threshold=100)
 
     # run the Baseline Model
-    folder = 'cv_skill_trial'
+    folder = 'whole_dataset_embed_100thres_cv'
     model = BaselineModel(train,test)
     model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
     mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)

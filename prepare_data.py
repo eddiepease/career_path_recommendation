@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import pandas as pd
 
-from read_data import read_single_json_data,read_ontology_data,read_embeddings_json,CVJobNormalizer
+from read_data import read_single_json_data,read_ontology_data,read_embeddings_json
 from baseline_model import BaselineModel
 
 ##############
@@ -134,29 +134,37 @@ def process_education_history(education_history, universities):
 def save_processed_dfs_baseline(save_name):
 
     # define hdf5
-    store = pd.HDFStore('data/cvs_v2_processed/' + save_name + '.h5')
-    files = [file for file in os.listdir('data/cvs_v2/') if file != '_SUCCESS']
+    store = pd.HDFStore('data/cvs_v3_baseline_processed/' + save_name + '.h5')
+    cv_directory = 'data/cvs_v3/'
+    files = [file for file in os.listdir(cv_directory) if file != '_SUCCESS']
+    len_df = 0
+    len_valid_df = 0
 
     t0 = time.time()
     print('t0:',t0)
 
     # loop through all files
-    for i in range(0,1):
+    for i in range(0,len(files)):
         print(i)
         print(time.time())
 
         # import and definitions
-        df = read_single_json_data(i,folder='data/cvs_v2/') # read in df
-        cv_job_normalizer = CVJobNormalizer()
+        df = read_single_json_data(i,folder=cv_directory) # read in df
         valid_indices = []
         job_feat_list = []
         job_label_list = []
-        job_to_predict = 0
+        len_df += len(df)
 
         for j in range(0, len(df)):
-            # print(i)
-            normalized_title_feat = cv_job_normalizer.normalized_job(df, n_row=j, job_num=job_to_predict + 1)
-            normalized_title_label = cv_job_normalizer.normalized_job(df, n_row=j, job_num=job_to_predict)
+            norm_emp_list = df['employment_history_norm'][j]
+            normalized_title_feat = None
+            normalized_title_label = None
+            if isinstance(norm_emp_list, list) and len(norm_emp_list) > 0:
+                try: normalized_title_feat = norm_emp_list[1]['title_norm']
+                except KeyError: pass
+                except IndexError: pass
+                try: normalized_title_label = norm_emp_list[0]['title_norm']
+                except KeyError: pass
 
             # track index of valid CVs
             if normalized_title_feat is not None and normalized_title_label is not None:
@@ -168,13 +176,16 @@ def save_processed_dfs_baseline(save_name):
         df_trans = df.iloc[valid_indices, :].reset_index(drop=True)
         df_trans['normalised_title_feat'] = job_feat_list
         df_trans['normalised_title_label'] = job_label_list
+        len_valid_df += len(df_trans)
 
         # save df as HDF5
-        key = str(i)
+        key = 'file_' + str(i)
         store[key] = df_trans
 
     t1 = time.time()
     print('Total time taken:', t1-t0)
+    print('Dataframe length: ', len_df)
+    print('Df length after preprocessing:', len_valid_df)
 
 
 # function which transforms the cvs for the nemo model
@@ -294,4 +305,5 @@ def save_processed_dfs_nemo(max_roles=10):
 
 if __name__ == "__main__":
 
-    save_processed_dfs_nemo(max_roles=10)
+    save_processed_dfs_baseline(save_name='df_store')
+    # save_processed_dfs_nemo(max_roles=10)

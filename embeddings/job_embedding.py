@@ -62,11 +62,10 @@ def create_cv_skill_embeddings(skills, skill_embeddings_dict):
     skill_embed = np.zeros(shape=(embedding_size, ), dtype=np.float32)
 
     # loop through the skills
-    for i,skill in enumerate(skills):
+    for skill in skills:
         try:
             skill_embed = skill_embed + skill_embeddings_dict[skill] * 1/len(skills)
         except KeyError:
-            print('Missing skill is: ', skill)
             pass
 
     return skill_embed

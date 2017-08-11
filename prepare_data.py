@@ -197,7 +197,7 @@ def save_processed_dfs_nemo(max_roles=10):
     job_store = h5py.File('data/cvs_v3_processed/job_store.h5','w')
     seqlen_store = h5py.File('data/cvs_v3_processed/seqlen_store.h5', 'w')
     skill_store = h5py.File('data/cvs_v3_processed/skill_store.h5', 'w')
-    edu_store = h5py.File('data/cvs_v3_processed/edu_store.h5', 'w')
+    # edu_store = h5py.File('data/cvs_v3_processed/edu_store.h5', 'w')
     label_store = h5py.File('data/cvs_v3_processed/label_store.h5', 'w')
 
     files = [file for file in os.listdir('data/cvs_v3/') if file != '_SUCCESS']
@@ -207,8 +207,8 @@ def save_processed_dfs_nemo(max_roles=10):
     print('t0:', t0)
 
     # job store
-    for i in range(0, 1):
-    # for i in range(0, len(files)):
+    # for i in range(0, 1):
+    for i in range(0, len(files)):
         print(i)
         print(time.time())
 
@@ -217,12 +217,15 @@ def save_processed_dfs_nemo(max_roles=10):
         file_data = np.zeros(shape=(len(df),max_roles,100))
         seq_len_array = np.zeros(shape=(len(df)))
         job_embed_dict = read_ontology_data('job-word2vec',file_type='pkl')
-        last_roles = []
+        # last_roles = []
+        last_roles = ['manager'] * len(df)
         last_roles_idx = []
+        complete_roles_idx = []
 
         # loop through rows
         for j in range(0,len(df)):
             person_emp_list = df['employment_history_norm'][j]
+            complete_roles = 0
             if isinstance(person_emp_list, list):
                 if len(person_emp_list) > 0:
                     # append sequence length
@@ -233,14 +236,20 @@ def save_processed_dfs_nemo(max_roles=10):
                         # append last role
                         if k == 0:
                             if 'title_norm' in person_emp_list[k]:
-                                last_roles.append(person_emp_list[k]['title_norm'])
-                                last_roles_idx.append(j)
+                                # last_roles.append(person_emp_list[k]['title_norm'])
+                                # last_roles_idx.append(j)
+                                last_roles[j] = person_emp_list[k]['title_norm']
                             else:
                                 continue
                         # numpy array
                         if 'title_norm' in person_emp_list[k]:
                             norm_title = person_emp_list[k]['title_norm']
                             file_data[j,idx,:] = job_embed_dict[norm_title]
+                            complete_roles += 1
+
+                #complete roles idx
+                if complete_roles == len(person_emp_list):
+                    complete_roles_idx.append(j)
 
         key = 'file_' + str(i)
 
@@ -248,6 +257,8 @@ def save_processed_dfs_nemo(max_roles=10):
         bm = BaselineModel(file_data,file_data)
         _,_, job_dict,_ = bm.prepare_feature_generation()
         label_array = np.array([job_dict[job] for job in last_roles])
+        print('Label array shape is: ',label_array.shape)
+        print('File data shape is: ', file_data.shape)
 
         # skills
         X_skill_list = []
@@ -270,25 +281,28 @@ def save_processed_dfs_nemo(max_roles=10):
 
         X_skill = np.array(X_skill_list)
 
-        # education
-        print('Doing education...')
-        unis = read_ontology_data('universities')
-        edu_array = np.zeros(shape=(len(df),6))
-        for l in range(0, len(df)):
-            print(l)
-            person_edu_list = df['education_history'][l]
-            if len(person_edu_list) > 0:
-                edu_array[l,:] = process_education_history(person_edu_list,unis)
+        # # education
+        # print('Doing education...')
+        # unis = read_ontology_data('universities')
+        # edu_array = np.zeros(shape=(len(df),6))
+        # for l in range(0, len(df)):
+        #     print(l)
+        #     person_edu_list = df['education_history'][l]
+        #     if len(person_edu_list) > 0:
+        #         edu_array[l,:] = process_education_history(person_edu_list,unis)
 
         # slice numpy arrays
-        file_data = file_data[last_roles_idx,:,:]
-        X_skill = X_skill[last_roles_idx,:]
-        edu_array = edu_array[last_roles_idx,:]
-        seq_len_array = seq_len_array[last_roles_idx,]
+        file_data = file_data[complete_roles_idx,:,:]
+        X_skill = X_skill[complete_roles_idx,:]
+        # edu_array = edu_array[last_roles_idx,:]
+        seq_len_array = seq_len_array[complete_roles_idx,]
+        label_array = label_array[complete_roles_idx,]
+
+        print(file_data.shape)
 
         # save
         skill_store.create_dataset(key,data=X_skill)
-        edu_store.create_dataset(key,data=edu_array)
+        # edu_store.create_dataset(key,data=edu_array)
         job_store.create_dataset(key, data=file_data)
         seqlen_store.create_dataset(key, data=seq_len_array)
         label_store.create_dataset(key, data=label_array)
@@ -305,5 +319,5 @@ def save_processed_dfs_nemo(max_roles=10):
 
 if __name__ == "__main__":
 
-    save_processed_dfs_baseline(save_name='df_store')
-    # save_processed_dfs_nemo(max_roles=10)
+    # save_processed_dfs_baseline(save_name='df_store')
+    save_processed_dfs_nemo(max_roles=10)

@@ -221,6 +221,7 @@ def save_processed_dfs_nemo(max_roles=10):
         last_roles = ['manager'] * len(df)
         last_roles_idx = []
         complete_roles_idx = []
+        delete_list = ['manager','consultant','advisor','engineer']
 
         # loop through rows
         for j in range(0,len(df)):
@@ -245,7 +246,10 @@ def save_processed_dfs_nemo(max_roles=10):
                         if 'title_norm' in person_emp_list[k]:
                             norm_title = person_emp_list[k]['title_norm']
                             file_data[j,idx,:] = job_embed_dict[norm_title]
-                            complete_roles += 1
+
+                            # delete list include
+                            if norm_title not in delete_list:
+                                complete_roles += 1
 
                 #complete roles idx
                 if complete_roles == len(person_emp_list):

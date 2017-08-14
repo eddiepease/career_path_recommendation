@@ -62,11 +62,12 @@ class NEMO(BaselineModel):
         # general definitions
         self.sess = tf.Session()
 
-        self.batch_size = 64
+        self.batch_size = 1000
         self.max_roles = 10
         self.embedding_size = 100
         self.n_linear_hidden = self.embedding_size
         self.n_lstm_hidden = 100
+        self.number_of_layers = 3
 
         ###########
         # encoder
@@ -92,7 +93,9 @@ class NEMO(BaselineModel):
 
         self.encoder_output = tf.expand_dims(self.encoder_output,axis=1)
         self.encoded_job_inputs = tf.concat([self.encoder_output,self.job_inputs],axis=1)
-        self.lstm = tf.nn.rnn_cell.BasicLSTMCell(self.n_lstm_hidden, state_is_tuple=True)
+        self.lstm = tf.contrib.rnn.BasicLSTMCell(self.n_lstm_hidden, state_is_tuple=True)
+        # self.lstm = tf.nn.rnn_cell.GRUCell(self.n_lstm_hidden)
+        # self.stacked_lstm = tf.contrib.rnn.MultiRNNCell(cells=[self.lstm for _ in range(self.number_of_layers)],state_is_tuple=True)
 
         with tf.variable_scope("decoder"):
             self.job_outputs, _ = tf.nn.dynamic_rnn(self.lstm, self.encoded_job_inputs,
@@ -156,11 +159,20 @@ class NEMO(BaselineModel):
             self.sess.run([self.train_step],train_feed_dict)
 
             if iter % print_freq == 0:
-                train_loss = self.sess.run(self.loss,train_feed_dict)
-                print('Train Loss at', iter, ": ", train_loss)
+                test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                                  self.job_inputs: self.X_job_test,
+                                  self.seqlen: self.seqlen_test,
+                                  self.job_true: np.expand_dims(self.y_test, axis=1)}
 
-        # saving model
-        self.save_model(self.sess,model_name)
+
+                train_loss = self.sess.run(self.loss,train_feed_dict)
+                test_loss = self.sess.run(self.loss,test_feed_dict)
+
+                print('Train Loss at', iter, ": ", train_loss)
+                print('Test Loss:', test_loss)
+
+        # # saving model
+        # self.save_model(self.sess,model_name)
 
         return self
 
@@ -209,9 +221,10 @@ class NEMO(BaselineModel):
 
 if __name__ == "__main__":
 
-    model = NEMO(n_files=5)
+    model = NEMO(n_files=20)
+    print(model.X_job_train.shape)
     # model.restore_nemo_model(model_name='first_run')
-    model.train_nemo_model(n_iter=20000,print_freq=1000,model_name='seqlen_run')
+    model.train_nemo_model(n_iter=10000,print_freq=1000,model_name='seqlen_run')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
 

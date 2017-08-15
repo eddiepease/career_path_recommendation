@@ -82,12 +82,14 @@ class NEMO(BaselineModel):
             self.W_linear = tf.Variable(tf.truncated_normal(shape=(int(self.concat_rep.get_shape()[1]),self.n_linear_hidden)))
             self.b_linear = tf.Variable(tf.constant(0.1,shape=(self.n_linear_hidden,)))
             self.encoder_output = tf.tanh(tf.matmul(self.concat_rep,self.W_linear) + self.b_linear)
+            # self.encoder_output = tf.Variable(tf.truncated_normal(shape=(None,
+            #                                                              int(self.max_pool_skills.get_shape()[1]))))
 
         ###########
         # decoder
         ###########
 
-        self.job_inputs = tf.placeholder(tf.float32, shape=(None, self.max_roles, self.embedding_size))
+        self.job_inputs = tf.placeholder(tf.float32, shape=(None, self.max_roles - 1, self.embedding_size))
         self.seqlen = tf.placeholder(tf.int32, shape=(None,))
         self.job_true = tf.placeholder(tf.int32,shape=(None,1))
 
@@ -98,12 +100,14 @@ class NEMO(BaselineModel):
         # self.stacked_lstm = tf.contrib.rnn.MultiRNNCell(cells=[self.lstm for _ in range(self.number_of_layers)],state_is_tuple=True)
 
         with tf.variable_scope("decoder"):
-            self.job_outputs, _ = tf.nn.dynamic_rnn(self.lstm, self.encoded_job_inputs,
+            self.job_outputs, self.last_states = tf.nn.dynamic_rnn(self.lstm, self.encoded_job_inputs,
                                                     sequence_length=self.seqlen,
                                                     initial_state=self.lstm.zero_state(tf.shape(self.job_inputs)[0], tf.float32))
 
         # output
-        self.final_job_output = self.job_outputs[:,self.max_roles-1,:]
+        # self.final_job_output = tf.gather_nd(self.job_outputs,self.seqlen)
+        self.actual_batch_size = tf.shape(self.job_inputs)[0]
+        self.final_job_output = tf.gather_nd(self.job_outputs, tf.stack([tf.range(self.actual_batch_size), self.seqlen - 1], axis=1))
 
         self.W_output = tf.Variable(tf.truncated_normal(shape=(self.n_lstm_hidden, self.n_unique_jobs)))
         self.b_output = tf.Variable(tf.constant(0.1, shape=(self.n_unique_jobs,)))
@@ -134,7 +138,7 @@ class NEMO(BaselineModel):
         if not os.path.exists(model_name):
             os.mkdir(model_name)
         saver = tf.train.Saver()
-        saver.save(session, 'saved_models/' + model_name + '/' + 'model.checkpoint')
+        saver.save(session, 'saved_models/' + model_name + '/' + 'saved_model')
 
     def nemo_mpr(self,y_pred_proba,y_true):
         mpr = np.mean([np.where(self.reduced_class_labels[y_pred_proba[i].argsort()[::-1]] == y_true[i])[0][0] / len(self.reduced_class_labels)
@@ -153,26 +157,25 @@ class NEMO(BaselineModel):
                                                                                              self.y_train,
                                                                                              batch_size=self.batch_size)
             train_feed_dict = {self.max_pool_skills: X_skill_batch,
-                               self.job_inputs: X_job_batch,
+                               self.job_inputs: X_job_batch[:,:self.max_roles-1,:],
                                self.seqlen: X_seqlen_batch,
                                self.job_true: y_batch}
             self.sess.run([self.train_step],train_feed_dict)
 
             if iter % print_freq == 0:
                 test_feed_dict = {self.max_pool_skills: self.X_skill_test,
-                                  self.job_inputs: self.X_job_test,
+                                  self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
                                   self.seqlen: self.seqlen_test,
                                   self.job_true: np.expand_dims(self.y_test, axis=1)}
 
-
-                train_loss = self.sess.run(self.loss,train_feed_dict)
-                test_loss = self.sess.run(self.loss,test_feed_dict)
+                train_loss = self.sess.run(self.loss, train_feed_dict)
+                test_loss = self.sess.run(self.loss, test_feed_dict)
 
                 print('Train Loss at', iter, ": ", train_loss)
                 print('Test Loss:', test_loss)
 
-        # # saving model
-        # self.save_model(self.sess,model_name)
+        # saving model
+        self.save_model(self.sess,model_name)
 
         return self
 
@@ -193,15 +196,15 @@ class NEMO(BaselineModel):
         # evaluate relevant variables from compute graph
         print('evaluating...')
         test_feed_dict = {self.max_pool_skills: self.X_skill_test,
-                          self.job_inputs: self.X_job_test,
+                          self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
                           self.seqlen: self.seqlen_test,
-                          self.job_true: np.expand_dims(self.y_test,axis=1)}
-        test_loss,test_probs = self.sess.run([self.loss,self.test_probs],test_feed_dict)
+                          self.job_true: np.expand_dims(self.y_test, axis=1)}
+        test_loss, test_probs = self.sess.run([self.loss, self.test_probs], test_feed_dict)
         print('Test Loss: ', test_loss)
 
         # calculating MPR
         print('calculating MPR')
-        mpr = self.nemo_mpr(test_probs,self.y_test)
+        mpr = self.nemo_mpr(test_probs, self.y_test)
 
         return mpr
 
@@ -224,7 +227,7 @@ if __name__ == "__main__":
     model = NEMO(n_files=20)
     print(model.X_job_train.shape)
     # model.restore_nemo_model(model_name='first_run')
-    model.train_nemo_model(n_iter=10000,print_freq=1000,model_name='seqlen_run')
+    model.train_nemo_model(n_iter=2000,print_freq=1000,model_name='seqlen_run')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
 
@@ -235,3 +238,5 @@ if __name__ == "__main__":
     #
     # mpr = model.nemo_mpr(test_array,y_true,class_labels)
     # print('MPR is: ', mpr)
+
+    # test gather_nd

@@ -6,7 +6,7 @@ import pickle
 import numpy as np
 import pandas as pd
 
-from read_data import read_single_json_data,read_ontology_data,read_embeddings_json
+from read_data import read_single_json_data,read_ontology_data,read_embeddings_json,read_h5_files_nemo
 from baseline_model import BaselineModel
 
 ##############
@@ -30,33 +30,34 @@ def strip_education_str(string):
     string = re.sub('\s+', ' ', string).strip()  # trim incorrect whitespaces
     return string
 
+
 # TODO: finish completing the KeyError changes
 def process_education_history(education_history, universities):
     # print ""
     # print ""
 
+    # setup
     education_features = np.zeros(6)  # uni_A,uni_B,uni_C,uni_D,MBA,PhD
+    uni_ranking = list(universities['shanghai_rank'])
+    uni_name = list(universities['name'])
+    uni_alt_name = list(universities['alt_name'])
+    uni_not_name = list(universities['not_name'])
+
 
     patt = r"(^(master|doctor)'?s?$|(master|doctor)'?s?\s(of|in)|degree|l\.?l\.?b\.?|\bdr\b|bachelor'?s?|\b(b\.?a\.?|mb?\.?a\.?|[mb]\.?s\.?c\.?|b\.?s\.?|hons|p\.?h\.?d\.?|[bm]\.?e\.?n\.?g\.?)\b)"  # must match this
     notpatt = r"(foundation|\baa\b|\bas\b)"  # must not match this
     degrees = []
     for edu in education_history:
-        try:
-            if edu["qualification_type"] is not None:
-                if re.search(patt, edu["qualification_type"], re.IGNORECASE) and not re.search(notpatt,
-                                                                                               edu["qualification_type"],
-                                                                                               re.IGNORECASE):
-                    degrees.append(edu)
-                    continue
-        except KeyError:
-            pass
+        if 'qualification_type' in edu and edu["qualification_type"] is not None:
+            if re.search(patt, edu["qualification_type"], re.IGNORECASE) and not re.search(notpatt,
+                                                                                            edu["qualification_type"],
+                                                                                            re.IGNORECASE):
+                degrees.append(edu)
 
-        try:
-            if edu["institution"] is not None:
-                if re.search(r'\b(university|polytechnic)\b', edu["institution"], re.IGNORECASE):
-                    degrees.append(edu)
-        except KeyError:
-            pass
+
+        if 'institution_name' in edu and edu["institution_name"] is not None:
+            if re.search(r'\b(university|polytechnic)\b', edu["institution_name"], re.IGNORECASE):
+                degrees.append(edu)
 
     # build features from degrees list:
     # Check_1: is 'name' a substring of cleaned institution name?
@@ -67,58 +68,66 @@ def process_education_history(education_history, universities):
     if len(degrees) > 0:
         lowest_rank = 3  # initialises at uni_D (the worst rank)
         for degree in degrees:
-            if degree["institution"] is None:
+            # uni_idx = 5000 # initialise at high value
+
+            # initiliase to guard against keyerrors
+            qual_true = False
+            inst_true = False
+            if 'qualification_type' in degree: qual_true = True
+            if 'institution_name' in degree: inst_true = True
+
+            if not inst_true or degree["institution_name"] is None:
                 match = False
-            else:
-                cleaned_institution_name = strip_education_str(degree["institution"])
-                for ind, uni in enumerate(universities):
-                    check1 = True if uni[0].decode("utf-8") and re.search(r"\b" + uni[0].decode("utf-8") + r"\b",
-                                                                          cleaned_institution_name,
-                                                                          re.IGNORECASE) else False  # name
-                    check2 = True if uni[1].decode("utf-8") and re.search(r"\b" + uni[1].decode("utf-8") + r"\b",
-                                                                          cleaned_institution_name,
-                                                                          re.IGNORECASE) else False  # alt name
-                    check3 = True if uni[2].decode("utf-8") and re.search(r"\b" + uni[2].decode("utf-8") + r"\b",
-                                                                          cleaned_institution_name,
-                                                                          re.IGNORECASE) else False  # not name
-                    match = True if ((check1 or check2) and not check3) else False
-                    if match == True:
-                        break
+            # else:
+            #     cleaned_institution_name = strip_education_str(degree["institution_name"])
+            #     for ind in range(len(universities)):
+            #         check1 = True if uni_name[ind] and re.search(r"\b" + uni_name[ind] + r"\b",
+            #                                               cleaned_institution_name,re.IGNORECASE) else False  # name
+            #         check2 = True if uni_alt_name[ind] and re.search(r"\b" + str(uni_alt_name[ind]) + r"\b",
+            #                                               cleaned_institution_name,re.IGNORECASE) else False  # alt name
+            #         check3 = True if uni_not_name[ind] and re.search(r"\b" + str(uni_not_name[ind]) + r"\b",
+            #                                               cleaned_institution_name,re.IGNORECASE) else False  # not name
+            #         match = True if ((check1 or check2) and not check3) else False
+            #         if match == True:
+            #             break
 
-            # calc rank and assign feature vals
-            if match == False:
-                rank = 3  # uni_D
-            else:
-                ranking = universities[ind][3]  # rank
-                if type(ranking) == int:
-                    if ranking <= 30:
-                        rank = 0  # uni_A
-                    else:
-                        rank = 1  # uni_B
-                else:
-                    if ranking == "101-150":
-                        rank = 1  # uni_B
-                    else:
-                        rank = 2  # uni_C
-
-            if rank < lowest_rank: lowest_rank = rank
+            # # calc rank and assign feature vals
+            # if match == False:
+            #     rank = 3  # uni_D
+            # else:
+            #     ranking = uni_ranking[ind]  # rank
+            #     if type(ranking) == int:
+            #         if ranking <= 30:
+            #             rank = 0  # uni_A
+            #         else:
+            #             rank = 1  # uni_B
+            #     else:
+            #         if ranking == "101-150":
+            #             rank = 1  # uni_B
+            #         else:
+            #             rank = 2  # uni_C
+            #
+            # if rank < lowest_rank: lowest_rank = rank
 
             # MBA/PHD terms:
             mbapatt = r"(master'?s?\s(of\s|in\s)?business\sadministration|\be?\.?m\.?b\.?a\.?\b)"
             phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
-            if degree["institution"] is None: degree["institution"] = "NONE"
-            if degree["qualification_type"] is None: degree["qualification_type"] = "NONE"
+            if not inst_true or degree["institution_name"] is None: degree["institution_name"] = "NONE"
+            if not qual_true or degree["qualification_type"] is None: degree["qualification_type"] = "NONE"
 
-            if (re.search(mbapatt, degree["institution"], re.IGNORECASE) or re.search(mbapatt,
+            if (re.search(mbapatt, degree["institution_name"], re.IGNORECASE) or re.search(mbapatt,
                                                                                       degree["qualification_type"],
                                                                                       re.IGNORECASE)):
                 education_features[4] = 1.  # mba
             phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
-            if (re.search(phdpatt, degree["institution"], re.IGNORECASE) or re.search(phdpatt,
+            if (re.search(phdpatt, degree["institution_name"], re.IGNORECASE) or re.search(phdpatt,
                                                                                       degree["qualification_type"],
                                                                                       re.IGNORECASE)):
                 education_features[5] = 1.  # phd
         education_features[lowest_rank] = 1.
+
+    education_features = education_history[4:]
+    print(education_features)
 
     return education_features
 
@@ -221,7 +230,7 @@ def save_processed_dfs_nemo(max_roles=10):
         last_roles = ['manager'] * len(df)
         last_roles_idx = []
         complete_roles_idx = []
-        delete_list = ['manager','consultant','advisor','engineer']
+        # delete_list = ['manager','consultant','advisor','engineer']
 
         # loop through rows
         for j in range(0,len(df)):
@@ -247,9 +256,9 @@ def save_processed_dfs_nemo(max_roles=10):
                             norm_title = person_emp_list[k]['title_norm']
                             file_data[j,idx,:] = job_embed_dict[norm_title]
 
-                            # delete list include
-                            if norm_title not in delete_list:
-                                complete_roles += 1
+                            # # delete list include
+                            # if norm_title not in delete_list:
+                            complete_roles += 1
 
                 #complete roles idx
                 if complete_roles == len(person_emp_list):
@@ -294,11 +303,12 @@ def save_processed_dfs_nemo(max_roles=10):
         #     person_edu_list = df['education_history'][l]
         #     if len(person_edu_list) > 0:
         #         edu_array[l,:] = process_education_history(person_edu_list,unis)
+        #         # print(edu_array[l,:])
 
         # slice numpy arrays
         file_data = file_data[complete_roles_idx,:,:]
         X_skill = X_skill[complete_roles_idx,:]
-        # edu_array = edu_array[last_roles_idx,:]
+        # edu_array = edu_array[complete_roles_idx,:]
         seq_len_array = seq_len_array[complete_roles_idx,]
         label_array = label_array[complete_roles_idx,]
 
@@ -325,3 +335,8 @@ if __name__ == "__main__":
 
     # save_processed_dfs_baseline(save_name='df_store')
     save_processed_dfs_nemo(max_roles=10)
+
+    # test education
+    array = read_h5_files_nemo('edu_store',num_files=1)
+
+    print(np.sum(array,axis=0))

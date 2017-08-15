@@ -9,7 +9,7 @@ from split_data import create_train_test_set_stratified_nemo
 
 # TODO: think about adding education
 class NEMO(BaselineModel):
-    def __init__(self, n_files,threshold=5):
+    def __init__(self, n_files,threshold=5, restore=False):
         self.threshold = threshold
         self.X_skill_train,self.X_skill_test = create_train_test_set_stratified_nemo(data_file_name='skill_store',
                                                                                      n_files=n_files,
@@ -24,6 +24,7 @@ class NEMO(BaselineModel):
                                                                                   n_files=n_files,
                                                                                   threshold=self.threshold)
         self.embedding_size = 100
+        self.restore = restore
         BaselineModel.__init__(self, self.X_skill_train, self.X_skill_train)
         _,_,self.job_dict,self.reverse_job_dict = self.prepare_feature_generation()
         self.initialize_values()
@@ -134,63 +135,81 @@ class NEMO(BaselineModel):
 
         return self
 
-    def save_model(self, session, model_name):
-        if not os.path.exists(model_name):
-            os.mkdir(model_name)
-        saver = tf.train.Saver()
-        saver.save(session, 'saved_models/' + model_name + '/' + 'saved_model')
-
     def nemo_mpr(self,y_pred_proba,y_true):
         mpr = np.mean([np.where(self.reduced_class_labels[y_pred_proba[i].argsort()[::-1]] == y_true[i])[0][0] / len(self.reduced_class_labels)
                        for i in range(len(y_true))
                        if y_true[i] in self.reduced_class_labels])
         return mpr
 
-    def train_nemo_model(self, n_iter, print_freq, model_name):
-        # train the model using a session
-        self.sess.run(tf.global_variables_initializer())
+    def run_nemo_model(self, n_iter, print_freq, model_name):
 
-        for iter in range(n_iter):
-            X_skill_batch,X_job_batch,X_seqlen_batch, y_batch = self.generate_random_batches(self.X_skill_train,
-                                                                                             self.X_job_train,
-                                                                                             self.seqlen_train,
-                                                                                             self.y_train,
-                                                                                             batch_size=self.batch_size)
-            train_feed_dict = {self.max_pool_skills: X_skill_batch,
-                               self.job_inputs: X_job_batch[:,:self.max_roles-1,:],
-                               self.seqlen: X_seqlen_batch,
-                               self.job_true: y_batch}
-            self.sess.run([self.train_step],train_feed_dict)
+        saver = tf.train.Saver()
+        folder_name = 'saved_models/' + model_name + '/'
+        file_name = 'saved_model'
 
-            if iter % print_freq == 0:
-                test_feed_dict = {self.max_pool_skills: self.X_skill_test,
-                                  self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
-                                  self.seqlen: self.seqlen_test,
-                                  self.job_true: np.expand_dims(self.y_test, axis=1)}
+        # restore the model
+        if self.restore:
+            print('Restoring ', model_name, '...')
+            saver = tf.train.import_meta_graph(folder_name + file_name + '.meta')
+            saver.restore(self.sess, tf.train.latest_checkpoint(folder_name))
 
-                train_loss = self.sess.run(self.loss, train_feed_dict)
-                test_loss = self.sess.run(self.loss, test_feed_dict)
+        # train the model
+        else:
 
-                print('Train Loss at', iter, ": ", train_loss)
-                print('Test Loss:', test_loss)
+            self.sess.run(tf.global_variables_initializer())
 
-        # saving model
-        self.save_model(self.sess,model_name)
+            for iter in range(n_iter):
+                X_skill_batch,X_job_batch,X_seqlen_batch, y_batch = self.generate_random_batches(self.X_skill_train,
+                                                                                                 self.X_job_train,
+                                                                                                 self.seqlen_train,
+                                                                                                 self.y_train,
+                                                                                                 batch_size=self.batch_size)
+                train_feed_dict = {self.max_pool_skills: X_skill_batch,
+                                   self.job_inputs: X_job_batch[:,:self.max_roles-1,:],
+                                   self.seqlen: X_seqlen_batch,
+                                   self.job_true: y_batch}
+                self.sess.run([self.train_step],train_feed_dict)
+
+                if iter % print_freq == 0:
+                    test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                                      self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
+                                      self.seqlen: self.seqlen_test,
+                                      self.job_true: np.expand_dims(self.y_test, axis=1)}
+
+                    train_loss = self.sess.run(self.loss, train_feed_dict)
+                    test_loss = self.sess.run(self.loss, test_feed_dict)
+
+                    print('Train Loss at', iter, ": ", train_loss)
+                    print('Test Loss:', test_loss)
+
+            # saving model
+            if not os.path.exists(model_name):
+                os.mkdir(model_name)
+            saver.save(self.sess, folder_name + file_name)
 
         return self
 
 
-    # TODO: test this
-    def restore_nemo_model(self, model_name):
-        tf.reset_default_graph()
-        save_dir = 'saved_models/' + model_name + '/'
-        saver = tf.train.import_meta_graph(save_dir + 'model.checkpoint.meta')
-        ckpt = tf.train.get_checkpoint_state(save_dir)
-        saver.restore(self.sess, ckpt.model_checkpoint_path)
-
-        # https://stackoverflow.com/questions/42832083/tensorflow-saving-restoring-session-checkpoint-metagraph
-
-        return self
+    # # TODO: test this
+    # def restore_nemo_model(self, model_name):
+    #     folder_name = 'saved_models/' + model_name + '/'
+    #     file_name = 'saved_model.meta'
+    #     with tf.Session() as sess:
+    #         # restore graph
+    #         new_saver = tf.train.import_meta_graph(folder_name + file_name)
+    #         new_saver.restore(sess, tf.train.latest_checkpoint(folder_name))
+    #         # print(sess.run('w1:0'))
+    #
+    #         # do something useful with graph
+    #         graph = tf.get_default_graph()
+    #         self.max_pool_skills = graph
+    #         self.job_inputs = tf.placeholder(tf.float32, shape=(None, self.max_roles - 1, self.embedding_size))
+    #         self.seqlen = tf.placeholder(tf.int32, shape=(None,))
+    #         self.job_true = tf.placeholder(tf.int32, shape=(None, 1))
+    #
+    #     # https://stackoverflow.com/questions/42832083/tensorflow-saving-restoring-session-checkpoint-metagraph
+    #
+    #     return self
 
     def evaluate_nemo(self):
         # evaluate relevant variables from compute graph
@@ -224,12 +243,13 @@ class NEMO(BaselineModel):
 
 if __name__ == "__main__":
 
-    model = NEMO(n_files=20)
-    print(model.X_job_train.shape)
-    # model.restore_nemo_model(model_name='first_run')
-    model.train_nemo_model(n_iter=2000,print_freq=1000,model_name='seqlen_run')
+    model = NEMO(n_files=1,restore=True)
+    # print(model.X_job_train.shape)
+    # # model.restore_nemo_model(model_name='first_run')
+    model.run_nemo_model(n_iter=2000,print_freq=1000,model_name='test_run')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
+    # model.restore_nemo_model('test_run')
 
     # # test mpr
     # test_array = np.random.rand(10,100)

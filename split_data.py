@@ -61,7 +61,11 @@ def create_train_test_set_stratified_nemo(data_file_name, n_files,n_seed=1,train
     print('Creating train/test set for',data_file_name, '...')
 
     # read in h5 files
-    array = read_h5_files_nemo(np_file_name=data_file_name,num_files=n_files)
+    if data_file_name == 'df_store':
+        array = read_h5_files_baseline(folder_name='data/cvs_v3_processed/',
+                                       file_name='df_store',num_files=n_files)
+    else:
+        array = read_h5_files_nemo(np_file_name=data_file_name,num_files=n_files)
     labels = read_h5_files_nemo(np_file_name='label_store',num_files=n_files)
 
     # implement threshold
@@ -70,6 +74,8 @@ def create_train_test_set_stratified_nemo(data_file_name, n_files,n_seed=1,train
         array = array[idx,:,:]
     elif data_file_name == 'skill_store':
         array = array[idx,:]
+    elif data_file_name == 'df_store':
+        array = array.iloc[idx,:]
     else:
         array = array[idx]
     labels = labels[idx]

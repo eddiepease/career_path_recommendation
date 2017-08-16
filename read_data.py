@@ -100,7 +100,7 @@ def read_h5_files_baseline(folder_name, file_name, num_files):
 
     df_result = pd.DataFrame()
     filename = folder_name + file_name + '.h5'
-    f = h5py.File(filename, 'r')
+    # f = h5py.File(filename, 'r')
 
     for i in range(0,num_files):
         key = 'file_' + str(i)

@@ -1,6 +1,12 @@
 import os
 import numpy as np
+import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import seaborn as sns
 import tensorflow as tf
+from collections import Counter
 
 from baseline_model import BaselineModel
 from read_data import read_ontology_data
@@ -23,6 +29,11 @@ class NEMO(BaselineModel):
         self.y_train, self.y_test = create_train_test_set_stratified_nemo(data_file_name='label_store',
                                                                                   n_files=n_files,
                                                                                   threshold=self.threshold)
+        self.df_train, self.df_test = create_train_test_set_stratified_nemo(data_file_name='df_store',
+                                                                            n_files=n_files,
+                                                                            threshold=self.threshold)
+        self.df_train = self.df_train.reset_index(drop=True)
+        self.df_test = self.df_test.reset_index(drop=True)
         self.embedding_size = 100
         self.restore = restore
         BaselineModel.__init__(self, self.X_skill_train, self.X_skill_train)
@@ -114,20 +125,6 @@ class NEMO(BaselineModel):
         self.b_output = tf.Variable(tf.constant(0.1, shape=(self.n_unique_jobs,)))
         self.logits = tf.matmul(self.final_job_output,self.W_output) + self.b_output
 
-        # calculate loss
-        # training
-        # self.softmax_size = 50
-        # self.W_softmax = tf.get_variable("proj_w", [self.n_unique_jobs, self.n_unique_jobs], dtype=tf.float32)
-        # self.b_softmax = tf.get_variable("proj_b", [self.n_unique_jobs], dtype=tf.float32)
-        # self.train_loss = tf.nn.sampled_softmax_loss(weights=self.W_softmax,
-        #                                     biases=self.b_softmax,
-        #                                     labels=self.job_true,
-        #                                     inputs=self.logits,
-        #                                     num_sampled=self.softmax_size,
-        #                                     num_classes=self.n_unique_jobs,
-        #                                     partition_strategy="div")
-
-
         self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.squeeze(self.job_true,axis=1),
                                                                                   logits=self.logits))
         self.train_step = tf.train.AdamOptimizer().minimize(self.loss)
@@ -136,10 +133,11 @@ class NEMO(BaselineModel):
         return self
 
     def nemo_mpr(self,y_pred_proba,y_true):
-        mpr = np.mean([np.where(self.reduced_class_labels[y_pred_proba[i].argsort()[::-1]] == y_true[i])[0][0] / len(self.reduced_class_labels)
+        mpr_list = [np.where(self.reduced_class_labels[y_pred_proba[i].argsort()[::-1]] == y_true[i])[0][0] / len(self.reduced_class_labels)
                        for i in range(len(y_true))
-                       if y_true[i] in self.reduced_class_labels])
-        return mpr
+                       if y_true[i] in self.reduced_class_labels]
+        mpr = np.mean(mpr_list)
+        return mpr,mpr_list
 
     def run_nemo_model(self, n_iter, print_freq, model_name):
 
@@ -189,28 +187,6 @@ class NEMO(BaselineModel):
 
         return self
 
-
-    # # TODO: test this
-    # def restore_nemo_model(self, model_name):
-    #     folder_name = 'saved_models/' + model_name + '/'
-    #     file_name = 'saved_model.meta'
-    #     with tf.Session() as sess:
-    #         # restore graph
-    #         new_saver = tf.train.import_meta_graph(folder_name + file_name)
-    #         new_saver.restore(sess, tf.train.latest_checkpoint(folder_name))
-    #         # print(sess.run('w1:0'))
-    #
-    #         # do something useful with graph
-    #         graph = tf.get_default_graph()
-    #         self.max_pool_skills = graph
-    #         self.job_inputs = tf.placeholder(tf.float32, shape=(None, self.max_roles - 1, self.embedding_size))
-    #         self.seqlen = tf.placeholder(tf.int32, shape=(None,))
-    #         self.job_true = tf.placeholder(tf.int32, shape=(None, 1))
-    #
-    #     # https://stackoverflow.com/questions/42832083/tensorflow-saving-restoring-session-checkpoint-metagraph
-    #
-    #     return self
-
     def evaluate_nemo(self):
         # evaluate relevant variables from compute graph
         print('evaluating...')
@@ -223,33 +199,109 @@ class NEMO(BaselineModel):
 
         # calculating MPR
         print('calculating MPR')
-        mpr = self.nemo_mpr(test_probs, self.y_test)
+        mpr,_ = self.nemo_mpr(test_probs, self.y_test)
 
         return mpr
 
-    # TODO: complete this
-    def test_individual_examples(self):
-        # take random example from initial df
+    def test_individual_examples(self,idx_list):
 
-        # convert this into terms that NEMO would understand
+        # initialize
+        results_columns = ['job_1','job_2','job_3','job_4','job_5','job_6','job_7','job_8','job_9','job_10','prediction']
+        df_results = pd.DataFrame(index=idx_list,columns=results_columns)
 
-        # run through the compute graph
+        test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                          self.job_inputs: self.X_job_test[:, :self.max_roles - 1, :],
+                          self.seqlen: self.seqlen_test,
+                          self.job_true: np.expand_dims(self.y_test, axis=1)}
+        test_probs = self.sess.run(self.test_probs, test_feed_dict)
 
-        # output a prob
 
-        # use reverse dict to convert into prediction
-        pass
+        # loop through df
+        for idx in idx_list:
+            row = self.df_test.iloc[idx,:][0]
+            for i in range(len(row)):
+                col = 'job_' + str(i+1)
+                df_results.loc[idx,col] = row[i]['title_norm']
+
+            # prediction
+            prediction_idx = np.argmax(test_probs,axis=1)[idx]
+            prediction_title = self.reverse_job_dict[self.reverse_job_reduce_dict[prediction_idx]]
+            df_results.loc[idx,'prediction'] = prediction_title
+
+        return df_results
+
+    def plot_error_analysis(self):
+
+        # calculate mpr list
+        test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                          self.job_inputs: self.X_job_test[:, :self.max_roles - 1, :],
+                          self.seqlen: self.seqlen_test,
+                          self.job_true: np.expand_dims(self.y_test, axis=1)}
+        test_probs = self.sess.run(self.test_probs, test_feed_dict)
+        _, mpr_list = self.nemo_mpr(test_probs, self.y_test)
+
+        ###################
+        # mpr against frequency of title
+        ###################
+
+        # frequency df
+        c = Counter(self.y_test)
+        array_freq = np.zeros(shape=(len(test_probs),3))
+        array_freq[:,0] = self.y_test
+        freq_list = [c[array_freq[i,0]] for i in range(len(test_probs))]
+        array_freq[:,1] = freq_list
+        array_freq[:,2] = mpr_list
+        df_freq = pd.DataFrame(array_freq,columns=['job_idx','count','mpr'])
+
+        # aggregate
+        bins = [0,50,100,500,2000,10000000]
+        group_names = ['<50', '50-100', '100-500', '500-2000', '>2000']
+        df_freq['categories'] = pd.cut(df_freq['count'], bins, labels=group_names)
+        df_freq = df_freq.groupby('categories').agg({'mpr':'mean'}).reset_index()
+
+        # plot
+        sns.barplot(x='categories',y='mpr',data=df_freq)
+        plt.title('MPR Performance against Popularity of Title')
+        plt.savefig('figures/nemo/title_freq_error.png')
+
+
+
+        ##################
+        # mpr against number of roles
+        #################
+
+        # aggregate
+        array_roles = np.transpose(np.array([self.y_test,self.seqlen_test,mpr_list]))
+        df_roles = pd.DataFrame(array_roles,columns=['job_idx','num_roles','mpr'])
+        df_roles = df_roles.groupby('num_roles').agg({'mpr': 'mean'}).reset_index()
+
+        # plot
+        sns.factorplot(x='num_roles', y='mpr', data=df_roles)
+        plt.title('MPR Performance against Experience')
+        plt.savefig('figures/nemo/num_roles_error.png')
+
+        return self
+
+
 
 
 if __name__ == "__main__":
 
-    model = NEMO(n_files=1,restore=True)
+    model = NEMO(n_files=20,restore=True)
     # print(model.X_job_train.shape)
     # # model.restore_nemo_model(model_name='first_run')
-    model.run_nemo_model(n_iter=2000,print_freq=1000,model_name='test_run')
+    model.run_nemo_model(n_iter=25000,print_freq=1000,model_name='baseline_clean_run')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
-    # model.restore_nemo_model('test_run')
+
+    # # test print individual examples
+    # test_list = [1,2]
+    # df_test = model.test_individual_examples(idx_list=test_list)
+    # print(df_test)
+
+    # test agg graph stuff
+    model.plot_error_analysis()
+
 
     # # test mpr
     # test_array = np.random.rand(10,100)

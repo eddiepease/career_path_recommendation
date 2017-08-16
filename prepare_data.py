@@ -208,6 +208,7 @@ def save_processed_dfs_nemo(max_roles=10):
     skill_store = h5py.File('data/cvs_v3_processed/skill_store.h5', 'w')
     # edu_store = h5py.File('data/cvs_v3_processed/edu_store.h5', 'w')
     label_store = h5py.File('data/cvs_v3_processed/label_store.h5', 'w')
+    df_store = pd.HDFStore('data/cvs_v3_processed/df_store.h5')
 
     files = [file for file in os.listdir('data/cvs_v3/') if file != '_SUCCESS']
     embedding_size = 100
@@ -311,6 +312,7 @@ def save_processed_dfs_nemo(max_roles=10):
         # edu_array = edu_array[complete_roles_idx,:]
         seq_len_array = seq_len_array[complete_roles_idx,]
         label_array = label_array[complete_roles_idx,]
+        df_array = df.iloc[complete_roles_idx,df.columns.get_loc("employment_history_norm")].reset_index(drop=True)
 
         print(file_data.shape)
 
@@ -320,6 +322,7 @@ def save_processed_dfs_nemo(max_roles=10):
         job_store.create_dataset(key, data=file_data)
         seqlen_store.create_dataset(key, data=seq_len_array)
         label_store.create_dataset(key, data=label_array)
+        df_store[key] = df_array
 
     skill_store.close()
     job_store.close()
@@ -335,8 +338,3 @@ if __name__ == "__main__":
 
     # save_processed_dfs_baseline(save_name='df_store')
     save_processed_dfs_nemo(max_roles=10)
-
-    # test education
-    array = read_h5_files_nemo('edu_store',num_files=1)
-
-    print(np.sum(array,axis=0))

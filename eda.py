@@ -223,19 +223,21 @@ class ExploratoryDataAnalysis():
 if __name__ == '__main__':
 
     # read data
-    df = read_all_json_data(folder='data/cvs_v3/')
+    df = read_all_json_data(folder='data/cvs_v4/')
     print(df.columns)
 
     # transform data
     eda = ExploratoryDataAnalysis(df,job_title_location='data/')
     # eda.most_recent_job_title(file_name='cvs_v3_job_freq')
     # eda.most_recent_job_category(job_title_filename='cvs_v3_job_freq')
-    # eda.number_of_roles()
+    eda.number_of_roles()
+    print(eda.transformed_df.shape)
+    print(eda.transformed_df.value_counts())
     # eda.work_experience_years()
 
-    # map plot
-    save_location = 'figures/whole_jobsite_data/cvs_v3/'
-    eda.location(file_location=save_location + 'cv_map.html')
+    # # map plot
+    # save_location = 'figures/whole_jobsite_data/cvs_v3/'
+    # eda.location(file_location=save_location + 'cv_map.html')
 
     # # plot data
     # save_location = 'figures/whole_jobsite_data/cvs_v3/'
@@ -246,12 +248,10 @@ if __name__ == '__main__':
     # plt.tight_layout()
     # plt.savefig(save_location + 'recent_job_category_test.png')
 
-
-
-    # eda.generate_histogram(xlabel_name='Number of years experience')
+    # eda.generate_histogram(xlabel_name='Number of roles')
     # plt.ylabel('Frequency')
-    # plt.title('Histogram of Years of Work Experience')
-    # plt.savefig(save_location + 'years_experience.png')
+    # plt.title('Histogram of Number of Roles')
+    # plt.savefig('number_of_roles.png')
     #
     # # # transform data
     # # eda = ExploratoryDataAnalysis(df,job_title_location='')

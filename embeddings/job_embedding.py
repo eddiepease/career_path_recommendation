@@ -14,7 +14,7 @@ def create_job_embedding(embedding_size):
     skill_profile_dict = read_ontology_data('skill-profiles',file_type='pkl')
 
     # read in skills embedding
-    file_name = 'data/ontology/skill-word2vec/data/skill_embeddings.json'
+    file_name = 'data/ontology/skill-word2vec-json/part-00000-f545a814-9c2f-420f-a022-2dd3fc62c30b.json'
     skill_embeddings_dict = read_embeddings_json(file_name)
 
     # initialize numpy array

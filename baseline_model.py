@@ -71,7 +71,7 @@ class BaselineModel():
                         try:
                             bos_dict[skill] += skills_dict[skill]
                         except KeyError:
-                            print('Missing skill is: ', skill)
+                            # print('Missing skill is: ', skill)
                             pass
 
                     features.append(bos_dict)
@@ -174,8 +174,8 @@ class BaselineModel():
             X_train, y_train = self.create_embedding_features(self.train, include_cv_skills='whole')
             X_test, y_test = self.create_embedding_features(self.test,include_cv_skills='whole')
         else:
-            X_train, y_train = self.create_bag_of_skills_features(self.train, include_cv_skills=True, tf_idf=weighted)
-            X_test, y_test = self.create_bag_of_skills_features(self.test, include_cv_skills=True, tf_idf=weighted)
+            X_train, y_train = self.create_bag_of_skills_features(self.train, include_cv_skills=False, tf_idf=weighted)
+            X_test, y_test = self.create_bag_of_skills_features(self.test, include_cv_skills=False, tf_idf=weighted)
 
         # save
         path = 'data/' + save_name + '/'
@@ -265,12 +265,12 @@ class BaselineModel():
 if __name__ == "__main__":
 
     # create train/test set
-    train, test = create_train_test_set_stratified_baseline(n_files=20,threshold=100)
+    train, test = create_train_test_set_stratified_baseline(n_files=1,threshold=1)
 
     # run the Baseline Model
-    folder = 'whole_dataset_embed_100thres_cv'
+    folder = 'whole_dataset_embed_1thres'
     model = BaselineModel(train,test)
-    model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
+    # model.save_transformed_data(embedding=True, weighted=False,save_name=folder)
     mpr = model.train_and_eval_model(model_type='gnb', save_name=folder)
     print('MPR: ', mpr)
 

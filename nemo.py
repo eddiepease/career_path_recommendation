@@ -75,7 +75,7 @@ class NEMO(BaselineModel):
         self.sess = tf.Session()
 
         self.batch_size = 1000
-        self.max_roles = 10
+        self.max_roles = 20
         self.embedding_size = 100
         self.n_linear_hidden = self.embedding_size
         self.n_lstm_hidden = 100
@@ -181,8 +181,8 @@ class NEMO(BaselineModel):
                     print('Test Loss:', test_loss)
 
             # saving model
-            if not os.path.exists(model_name):
-                os.mkdir(model_name)
+            if not os.path.exists(folder_name):
+                os.mkdir(folder_name)
             saver.save(self.sess, folder_name + file_name)
 
         return self
@@ -287,10 +287,10 @@ class NEMO(BaselineModel):
 
 if __name__ == "__main__":
 
-    model = NEMO(n_files=20,restore=True)
+    model = NEMO(n_files=20)
     # print(model.X_job_train.shape)
     # # model.restore_nemo_model(model_name='first_run')
-    model.run_nemo_model(n_iter=25000,print_freq=1000,model_name='baseline_clean_run')
+    model.run_nemo_model(n_iter=25000,print_freq=2000,model_name='baseline_new')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
 
@@ -300,7 +300,7 @@ if __name__ == "__main__":
     # print(df_test)
 
     # test agg graph stuff
-    model.plot_error_analysis()
+    # model.plot_error_analysis()
 
 
     # # test mpr

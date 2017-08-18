@@ -5,6 +5,7 @@ import time
 import pickle
 import numpy as np
 import pandas as pd
+from collections import Counter
 
 from read_data import read_single_json_data,read_ontology_data,read_embeddings_json,read_h5_files_nemo
 from baseline_model import BaselineModel
@@ -32,16 +33,17 @@ def strip_education_str(string):
 
 
 # TODO: finish completing the KeyError changes
-def process_education_history(education_history, universities):
+def process_education_history(education_history): #, universities):
     # print ""
     # print ""
 
     # setup
-    education_features = np.zeros(6)  # uni_A,uni_B,uni_C,uni_D,MBA,PhD
-    uni_ranking = list(universities['shanghai_rank'])
-    uni_name = list(universities['name'])
-    uni_alt_name = list(universities['alt_name'])
-    uni_not_name = list(universities['not_name'])
+    # education_features = np.zeros(6)  # uni_A,uni_B,uni_C,uni_D,MBA,PhD
+    # uni_ranking = list(universities['shanghai_rank'])
+    # uni_name = list(universities['name'])
+    # uni_alt_name = list(universities['alt_name'])
+    # uni_not_name = list(universities['not_name'])
+    cleaned_name = 'BLANK'
 
 
     patt = r"(^(master|doctor)'?s?$|(master|doctor)'?s?\s(of|in)|degree|l\.?l\.?b\.?|\bdr\b|bachelor'?s?|\b(b\.?a\.?|mb?\.?a\.?|[mb]\.?s\.?c\.?|b\.?s\.?|hons|p\.?h\.?d\.?|[bm]\.?e\.?n\.?g\.?)\b)"  # must match this
@@ -108,28 +110,33 @@ def process_education_history(education_history, universities):
             #             rank = 2  # uni_C
             #
             # if rank < lowest_rank: lowest_rank = rank
+            else:
+                cleaned_name = strip_education_str(degree["institution_name"])
+                break
 
-            # MBA/PHD terms:
-            mbapatt = r"(master'?s?\s(of\s|in\s)?business\sadministration|\be?\.?m\.?b\.?a\.?\b)"
-            phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
-            if not inst_true or degree["institution_name"] is None: degree["institution_name"] = "NONE"
-            if not qual_true or degree["qualification_type"] is None: degree["qualification_type"] = "NONE"
 
-            if (re.search(mbapatt, degree["institution_name"], re.IGNORECASE) or re.search(mbapatt,
-                                                                                      degree["qualification_type"],
-                                                                                      re.IGNORECASE)):
-                education_features[4] = 1.  # mba
-            phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
-            if (re.search(phdpatt, degree["institution_name"], re.IGNORECASE) or re.search(phdpatt,
-                                                                                      degree["qualification_type"],
-                                                                                      re.IGNORECASE)):
-                education_features[5] = 1.  # phd
-        education_features[lowest_rank] = 1.
 
-    education_features = education_history[4:]
-    print(education_features)
+        #     # MBA/PHD terms:
+        #     mbapatt = r"(master'?s?\s(of\s|in\s)?business\sadministration|\be?\.?m\.?b\.?a\.?\b)"
+        #     phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
+        #     if not inst_true or degree["institution_name"] is None: degree["institution_name"] = "NONE"
+        #     if not qual_true or degree["qualification_type"] is None: degree["qualification_type"] = "NONE"
+        #
+        #     if (re.search(mbapatt, degree["institution_name"], re.IGNORECASE) or re.search(mbapatt,
+        #                                                                               degree["qualification_type"],
+        #                                                                               re.IGNORECASE)):
+        #         education_features[4] = 1.  # mba
+        #     phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
+        #     if (re.search(phdpatt, degree["institution_name"], re.IGNORECASE) or re.search(phdpatt,
+        #                                                                               degree["qualification_type"],
+        #                                                                               re.IGNORECASE)):
+        #         education_features[5] = 1.  # phd
+        # education_features[lowest_rank] = 1.
 
-    return education_features
+    # education_features = education_history[4:]
+    # print(education_features)
+
+    return cleaned_name
 
 
 
@@ -203,15 +210,20 @@ def save_processed_dfs_baseline(save_name):
 def save_processed_dfs_nemo(max_roles=10):
 
     # define hdf5
-    job_store = h5py.File('data/cvs_v3_processed/job_store.h5','w')
-    seqlen_store = h5py.File('data/cvs_v3_processed/seqlen_store.h5', 'w')
-    skill_store = h5py.File('data/cvs_v3_processed/skill_store.h5', 'w')
-    # edu_store = h5py.File('data/cvs_v3_processed/edu_store.h5', 'w')
-    label_store = h5py.File('data/cvs_v3_processed/label_store.h5', 'w')
-    df_store = pd.HDFStore('data/cvs_v3_processed/df_store.h5')
+    job_store = h5py.File('data/cvs_v4_processed/job_store.h5','w')
+    seqlen_store = h5py.File('data/cvs_v4_processed/seqlen_store.h5', 'w')
+    skill_store = h5py.File('data/cvs_v4_processed/skill_store.h5', 'w')
+    # edu_store = h5py.File('data/cvs_v4_processed/edu_store.h5', 'w')
+    label_store = h5py.File('data/cvs_v4_processed/label_store.h5', 'w')
+    df_store = pd.HDFStore('data/cvs_v4_processed/df_store.h5')
 
-    files = [file for file in os.listdir('data/cvs_v3/') if file != '_SUCCESS']
+    files = [file for file in os.listdir('data/cvs_v4/') if file != '_SUCCESS']
     embedding_size = 100
+    no_skill_profile_list = ['photographic developer', 'glass painter', 'tax inspector', 'laundry ironer', 'outdoor activities coordinator',
+                            "special-interest groups' official", 'footwear product development manager', 'marine firefighter', 'craft shop manager',
+                            'textile colourist', 'stone engraver', 'control panel tester']
+
+    df_main_edu = pd.DataFrame()
 
     t0 = time.time()
     print('t0:', t0)
@@ -223,7 +235,7 @@ def save_processed_dfs_nemo(max_roles=10):
         print(time.time())
 
         # import and definitions
-        df = read_single_json_data(num_file=i,folder='data/cvs_v3/')  # read in df
+        df = read_single_json_data(num_file=i,folder='data/cvs_v4/')  # read in df
         file_data = np.zeros(shape=(len(df),max_roles,100))
         seq_len_array = np.zeros(shape=(len(df)))
         job_embed_dict = read_ontology_data('job-word2vec',file_type='pkl')
@@ -243,7 +255,11 @@ def save_processed_dfs_nemo(max_roles=10):
                     seq_len_array[j,] = len(person_emp_list)
                     # loop through roles
                     for k in range(0,len(person_emp_list)):
-                        idx = len(person_emp_list) - k - 1
+                        # set idx according length of employment
+                        if len(person_emp_list) >= max_roles:
+                            idx = max_roles - k - 1
+                        else:
+                            idx = len(person_emp_list) - k - 1
                         # append last role
                         if k == 0:
                             if 'title_norm' in person_emp_list[k]:
@@ -255,11 +271,15 @@ def save_processed_dfs_nemo(max_roles=10):
                         # numpy array
                         if 'title_norm' in person_emp_list[k]:
                             norm_title = person_emp_list[k]['title_norm']
-                            file_data[j,idx,:] = job_embed_dict[norm_title]
+                            if norm_title not in no_skill_profile_list:
+                                file_data[j,idx,:] = job_embed_dict[norm_title]
 
-                            # # delete list include
-                            # if norm_title not in delete_list:
-                            complete_roles += 1
+                                # # delete list include
+                                # if norm_title not in delete_list:
+                                complete_roles += 1
+                        # to make sure we don't go over numpy idx array
+                        if k >= max_roles:
+                            break
 
                 #complete roles idx
                 if complete_roles == len(person_emp_list):
@@ -270,13 +290,21 @@ def save_processed_dfs_nemo(max_roles=10):
         # labels
         bm = BaselineModel(file_data,file_data)
         _,_, job_dict,_ = bm.prepare_feature_generation()
-        label_array = np.array([job_dict[job] for job in last_roles])
+        # label_array = np.array([job_dict[job] for job in last_roles])
+        ###### TEMP SOLUTION ######
+        label_array = []
+        for job in last_roles:
+            try:
+                label_array.append(job_dict[job])
+            except KeyError:
+                label_array.append(0)
+        label_array = np.array(label_array)
         print('Label array shape is: ',label_array.shape)
         print('File data shape is: ', file_data.shape)
 
         # skills
         X_skill_list = []
-        file_name = 'data/ontology/skill-word2vec/data/skill_embeddings.json'
+        file_name = 'data/ontology/skill-word2vec-json/part-00000-f545a814-9c2f-420f-a022-2dd3fc62c30b.json'
         skill_embeddings_dict = read_embeddings_json(file_name)
 
         for person in list(df['skills']):
@@ -306,6 +334,29 @@ def save_processed_dfs_nemo(max_roles=10):
         #         edu_array[l,:] = process_education_history(person_edu_list,unis)
         #         # print(edu_array[l,:])
 
+        # test education
+        print('start education...')
+        uni_dict = read_ontology_data('universities',file_type='pkl')
+        df_edu = pd.DataFrame(index=list(range(len(df))),columns=['cleaned_cv_name','ranking'])
+        for l in range(0, len(df)):
+            person_edu_list = df['education_history'][l]
+            cleaned_cv_name = 'BLANK'
+            if len(person_edu_list) > 0:
+                cleaned_cv_name = process_education_history(person_edu_list)
+            df_edu.loc[l,'cleaned_cv_name'] = cleaned_cv_name
+            try:
+                df_edu.loc[l, 'ranking'] = uni_dict[cleaned_cv_name]
+            except KeyError:
+                df_edu.loc[l, 'ranking'] = 'BLANK'
+
+        # filter + save df
+        df_edu = df_edu[df_edu['cleaned_cv_name'] != 'BLANK']
+        # df_edu = df_edu[df_edu['ranking'] == 'BLANK']
+
+        df_main_edu = pd.concat([df_main_edu, df_edu]).reset_index(drop=True)
+
+
+
         # slice numpy arrays
         file_data = file_data[complete_roles_idx,:,:]
         X_skill = X_skill[complete_roles_idx,:]
@@ -329,6 +380,16 @@ def save_processed_dfs_nemo(max_roles=10):
     seqlen_store.close()
     label_store.close()
 
+    # education test
+    df_final_1 = df_main_edu[df_main_edu['ranking'] == 'BLANK']
+    df_final_1 = df_final_1.groupby('cleaned_cv_name').count()
+    df_final_1.to_csv('edu_no_rank.csv')
+
+    df_final_2 = df_main_edu[df_main_edu['ranking'] != 'BLANK']
+    df_final_2 = df_final_2.groupby('cleaned_cv_name').count()
+    df_final_2.to_csv('edu_rank.csv')
+    # df_final.sort_values('cleaned_cv_name',ascending=False,inplace=True)
+
     # time
     t1 = time.time()
     print('Total time taken:', t1 - t0)
@@ -337,4 +398,4 @@ def save_processed_dfs_nemo(max_roles=10):
 if __name__ == "__main__":
 
     # save_processed_dfs_baseline(save_name='df_store')
-    save_processed_dfs_nemo(max_roles=10)
+    save_processed_dfs_nemo(max_roles=20)

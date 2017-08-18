@@ -62,7 +62,7 @@ def create_train_test_set_stratified_nemo(data_file_name, n_files,n_seed=1,train
 
     # read in h5 files
     if data_file_name == 'df_store':
-        array = read_h5_files_baseline(folder_name='data/cvs_v3_processed/',
+        array = read_h5_files_baseline(folder_name='data/cvs_v4_processed/',
                                        file_name='df_store',num_files=n_files)
     else:
         array = read_h5_files_nemo(np_file_name=data_file_name,num_files=n_files)

@@ -83,7 +83,7 @@ def read_single_json_data(num_file,folder):
 def read_all_json_data(folder):
     # define variables
     data = []
-    files = os.listdir(folder)[:1]
+    files = os.listdir(folder)
 
     # loop through files
     for file in files:
@@ -123,6 +123,9 @@ def read_h5_files_nemo(np_file_name, num_files):
     for i in range(0,num_files):
         key = 'file_' + str(i)
         np_list.append(np_f[key][:])
+
+    # key = 'file_1'
+    # np_list.append(np_f[key][:])
 
     # tidy up
     np_f.close()

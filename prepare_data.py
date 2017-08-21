@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from collections import Counter
 
-from read_data import read_single_json_data,read_ontology_data,read_embeddings_json,read_h5_files_nemo
+from read_data import read_single_json_data,read_ontology_data,read_embeddings_json,read_h5_files_nemo,read_all_json_data
 from baseline_model import BaselineModel
 
 ##############
@@ -35,7 +35,8 @@ def strip_education_str(string):
 def process_education_history(education_history, uni_dict):
 
     # setup
-    education_features = np.zeros(504) # one for each university ranking {500}, no university, unranked uni, MBA,PhD
+    education_features = np.zeros(7) # 0: top 30 uni, 1: 30-150, 2: 150-500, 3: unranked, 4:no university, 5:MBA,6:PhD
+    # education_features = np.zeros(504)
 
     if len(education_history) > 0:
 
@@ -70,14 +71,23 @@ def process_education_history(education_history, uni_dict):
                     try:
                         # insert 1 in the university rank
                         cleaned_institution_name = strip_education_str(degree["institution"])
-                        education_features[uni_dict[cleaned_institution_name] - 1] = 1
+                        rank = uni_dict[cleaned_institution_name]
+                        # education_features[rank - 1] = 1 # 1 in university rank
+                        if rank <= 30:
+                            education_features[0] = 1 # top 30 uni
+                        elif rank > 30 and rank <= 150:
+                            education_features[1] = 1 # 30-150 uni
+                        elif rank > 150:
+                            education_features[2] = 1 # 150-500 uni
+                        else:
+                            education_features[3] = 1 # unranked
                     except KeyError:
-                        # unranked uni
-                        education_features[501] = 1
+                        education_features[3] = 1 # unranked
+                        # education_features[501] = 1
 
                 else:
-                    # insert 1 in unranked university
-                    education_features[501] = 1
+                    education_features[3] = 1 # unranked
+                    # education_features[501] = 1
 
                 # MBA/PHD terms:
                 mbapatt = r"(master'?s?\s(of\s|in\s)?business\sadministration|\be?\.?m\.?b\.?a\.?\b)"
@@ -88,15 +98,18 @@ def process_education_history(education_history, uni_dict):
                 if (re.search(mbapatt, degree["institution"], re.IGNORECASE) or re.search(mbapatt,
                                                                                           degree["qualification_type"],
                                                                                           re.IGNORECASE)):
-                    education_features[502] = 1.  # mba
+                    education_features[5] = 1  # mba
+                    # education_features[502] = 1
                 phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
                 if (re.search(phdpatt, degree["institution"], re.IGNORECASE) or re.search(phdpatt,
                                                                                           degree["qualification_type"],
                                                                                           re.IGNORECASE)):
-                    education_features[503] = 1.  # phd
+                    education_features[6] = 1.  # phd
+                    # education_features[503] = 1
 
     else:
-        education_features[500] = 1 # no university
+        education_features[4] = 1 # no university
+        # education_features[500] = 1
 
 
     return education_features
@@ -200,6 +213,7 @@ def save_processed_dfs_nemo(max_roles=10):
 
         # import and definitions
         df = read_single_json_data(num_file=i,folder='data/cvs_v4/')  # read in df
+        # df = read_all_json_data(folder='data/cvs_v4/')
         file_data = np.zeros(shape=(len(df),max_roles,100))
         seq_len_array = np.zeros(shape=(len(df)))
         job_embed_dict = read_ontology_data('job-word2vec',file_type='pkl')
@@ -250,6 +264,7 @@ def save_processed_dfs_nemo(max_roles=10):
                     complete_roles_idx.append(j)
 
         key = 'file_' + str(i)
+        # key = 'file_1'
 
         # labels
         bm = BaselineModel(file_data,file_data)
@@ -337,6 +352,7 @@ def save_processed_dfs_nemo(max_roles=10):
         df_store[key] = df_array
 
     skill_store.close()
+    edu_store.close()
     job_store.close()
     seqlen_store.close()
     label_store.close()

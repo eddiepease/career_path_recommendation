@@ -35,8 +35,8 @@ def strip_education_str(string):
 def process_education_history(education_history, uni_dict):
 
     # setup
-    education_features = np.zeros(7) # 0: top 30 uni, 1: 30-150, 2: 150-500, 3: unranked, 4:no university, 5:MBA,6:PhD
-    # education_features = np.zeros(504)
+    # education_features = np.zeros(7) # 0: top 30 uni, 1: 30-150, 2: 150-500, 3: unranked, 4:no university, 5:MBA,6:PhD
+    education_features = np.zeros(504)
 
     if len(education_history) > 0:
 
@@ -72,22 +72,22 @@ def process_education_history(education_history, uni_dict):
                         # insert 1 in the university rank
                         cleaned_institution_name = strip_education_str(degree["institution"])
                         rank = uni_dict[cleaned_institution_name]
-                        # education_features[rank - 1] = 1 # 1 in university rank
-                        if rank <= 30:
-                            education_features[0] = 1 # top 30 uni
-                        elif rank > 30 and rank <= 150:
-                            education_features[1] = 1 # 30-150 uni
-                        elif rank > 150:
-                            education_features[2] = 1 # 150-500 uni
-                        else:
-                            education_features[3] = 1 # unranked
+                        education_features[rank - 1] = 1 # 1 in university rank
+                        # if rank <= 30:
+                        #     education_features[0] = 1 # top 30 uni
+                        # elif rank > 30 and rank <= 150:
+                        #     education_features[1] = 1 # 30-150 uni
+                        # elif rank > 150:
+                        #     education_features[2] = 1 # 150-500 uni
+                        # else:
+                        #     education_features[3] = 1 # unranked
                     except KeyError:
-                        education_features[3] = 1 # unranked
-                        # education_features[501] = 1
+                        # education_features[3] = 1 # unranked
+                        education_features[501] = 1
 
                 else:
-                    education_features[3] = 1 # unranked
-                    # education_features[501] = 1
+                    # education_features[3] = 1 # unranked
+                    education_features[501] = 1
 
                 # MBA/PHD terms:
                 mbapatt = r"(master'?s?\s(of\s|in\s)?business\sadministration|\be?\.?m\.?b\.?a\.?\b)"
@@ -98,18 +98,18 @@ def process_education_history(education_history, uni_dict):
                 if (re.search(mbapatt, degree["institution"], re.IGNORECASE) or re.search(mbapatt,
                                                                                           degree["qualification_type"],
                                                                                           re.IGNORECASE)):
-                    education_features[5] = 1  # mba
-                    # education_features[502] = 1
+                    # education_features[5] = 1  # mba
+                    education_features[502] = 1
                 phdpatt = r"(doctor\sof|^doctor$|doctorate|\bp\.?h\.?d\.?|d\.?phil|^dr\.?$)"
                 if (re.search(phdpatt, degree["institution"], re.IGNORECASE) or re.search(phdpatt,
                                                                                           degree["qualification_type"],
                                                                                           re.IGNORECASE)):
-                    education_features[6] = 1.  # phd
-                    # education_features[503] = 1
+                    # education_features[6] = 1.  # phd
+                    education_features[503] = 1
 
     else:
-        education_features[4] = 1 # no university
-        # education_features[500] = 1
+        # education_features[4] = 1 # no university
+        education_features[500] = 1
 
 
     return education_features
@@ -231,6 +231,8 @@ def save_processed_dfs_nemo(max_roles=10):
                 if len(person_emp_list) > 0:
                     # append sequence length
                     seq_len_array[j,] = len(person_emp_list)
+                    if len(person_emp_list) == 0:
+                        print('BLANK!!!')
                     # loop through roles
                     for k in range(0,len(person_emp_list)):
                         # set idx according length of employment

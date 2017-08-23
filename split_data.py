@@ -66,7 +66,10 @@ def create_train_test_set_stratified_nemo(data_file_name, n_files,n_seed=1,train
                                        file_name='df_store',num_files=n_files)
     else:
         array = read_h5_files_nemo(np_file_name=data_file_name,num_files=n_files)
+
+    # array = np.zeros(1)
     labels = read_h5_files_nemo(np_file_name='label_store',num_files=n_files)
+    # print(len(labels))
 
     # implement threshold
     idx = remove_infrequent_labels(labels, threshold)
@@ -78,6 +81,8 @@ def create_train_test_set_stratified_nemo(data_file_name, n_files,n_seed=1,train
         array = array.iloc[idx,:]
     else:
         array = array[idx]
+        #array = np.array(range(637785))
+        # print(len(array))
     labels = labels[idx]
 
     # stratified split
@@ -191,15 +196,15 @@ def compare_cv_dfs(df_1,df_2,folder_name):
 
 if __name__ == "__main__":
 
-    # TODO: get the auto plot comparisons to work
-    train, test = create_train_test_set_stratified_baseline(n_files=1)
-    print(train.shape)
-    print(test.shape)
-
-    compare_cv_dfs(train,test,folder_name='1_sample')
-
-    # train,test = create_train_test_set_stratified(n_files=1)
+    # # TODO: get the auto plot comparisons to work
+    # train, test = create_train_test_set_stratified_baseline(n_files=1)
     # print(train.shape)
     # print(test.shape)
+    #
+    # compare_cv_dfs(train,test,folder_name='1_sample')
+
+    train,test = create_train_test_set_stratified_nemo(data_file_name='label_store',n_files=20,threshold=5)
+    print(train[:50])
+    print(test[:50])
 
 

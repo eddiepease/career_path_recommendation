@@ -258,6 +258,6 @@ if __name__ == "__main__":
     # skills_profile_to_dict()
 
     # skills_profile_to_dict('data/ontology/skill-profiles/skill_profile_dict.pkl')
-    # skills_pt_to_dict('data/ontology/skill-pt/skill_pt_dict.pkl')
+    skills_pt_to_dict('data/ontology/skill-pt/skill_pt_dict.pkl')
 
-    universities_to_dict('data/ontology/universities/university_ranking.pkl')
+    # universities_to_dict('data/ontology/universities/university_ranking.pkl')

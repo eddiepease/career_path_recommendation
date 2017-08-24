@@ -11,7 +11,7 @@ from collections import Counter
 from baseline_model import BaselineModel
 from read_data import read_ontology_data
 from split_data import create_train_test_set_stratified_nemo
-from bn_lstm import LSTMCell,BNLSTMCell, orthogonal_initializer
+# from bn_lstm import LSTMCell,BNLSTMCell, orthogonal_initializer
 
 
 class NEMO(BaselineModel):
@@ -90,14 +90,14 @@ class NEMO(BaselineModel):
         # encoder
         ###########
 
-        self.max_pool_skills = tf.placeholder(dtype=tf.float32,shape=(None,self.embedding_size))
+        # self.max_pool_skills = tf.placeholder(dtype=tf.float32,shape=(None,self.embedding_size))
         self.education = tf.placeholder(dtype=tf.float32,shape=(None,self.education_size))
         # add university perhaps in the future + location
 
         # one layer NN
         with tf.variable_scope("encoder"):
-            self.concat_rep = tf.concat([self.max_pool_skills,self.education],axis=1)
-            # self.concat_rep = self.education
+            # self.concat_rep = tf.concat([self.max_pool_skills,self.education],axis=1)
+            self.concat_rep = self.education
             self.W_linear = tf.get_variable("W_linear",shape=(int(self.concat_rep.get_shape()[1]),self.n_linear_hidden),
                                             initializer=tf.contrib.layers.xavier_initializer())
             self.b_linear = tf.Variable(tf.constant(0.0,shape=(self.n_linear_hidden,)))
@@ -181,7 +181,7 @@ class NEMO(BaselineModel):
                                                                                                  self.seqlen_train,
                                                                                                  self.y_train,
                                                                                                  batch_size=self.batch_size)
-                train_feed_dict = {self.max_pool_skills: X_skill_batch,
+                train_feed_dict = {#self.max_pool_skills: X_skill_batch,
                                    self.education: X_edu_batch,
                                    self.job_inputs: X_job_batch[:,:self.max_roles-1,:],
                                    self.seqlen: X_seqlen_batch,
@@ -189,7 +189,7 @@ class NEMO(BaselineModel):
                 self.sess.run([self.train_step],train_feed_dict)
 
                 if iter % print_freq == 0:
-                    test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                    test_feed_dict = {#self.max_pool_skills: self.X_skill_test,
                                       self.education: self.X_edu_test,
                                       self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
                                       self.seqlen: self.seqlen_test,
@@ -211,7 +211,7 @@ class NEMO(BaselineModel):
     def evaluate_nemo(self):
         # evaluate relevant variables from compute graph
         print('evaluating...')
-        test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+        test_feed_dict = {# self.max_pool_skills: self.X_skill_test,
                           self.education: self.X_edu_test,
                           self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
                           self.seqlen: self.seqlen_test,
@@ -233,7 +233,7 @@ class NEMO(BaselineModel):
         whole_index = jobs_index + results_index
         df_results = pd.DataFrame(index=whole_index,columns=idx_list)
 
-        test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+        test_feed_dict = {# self.max_pool_skills: self.X_skill_test,
                           self.education: self.X_edu_test,
                           self.job_inputs: self.X_job_test[:, :self.max_roles - 1, :],
                           self.seqlen: self.seqlen_test,
@@ -265,7 +265,7 @@ class NEMO(BaselineModel):
         print('Plotting performance analysis...')
 
         # calculate mpr list
-        test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+        test_feed_dict = {# self.max_pool_skills: self.X_skill_test,
                           self.education: self.X_edu_test,
                           self.job_inputs: self.X_job_test[:, :self.max_roles - 1, :],
                           self.seqlen: self.seqlen_test,
@@ -291,12 +291,13 @@ class NEMO(BaselineModel):
         group_names = ['<50', '50-100', '100-500', '500-2000', '>2000']
         df_freq['categories'] = pd.cut(df_freq['count'], bins, labels=group_names)
         df_freq = df_freq.groupby('categories').agg({'mpr':'mean'}).reset_index()
+        df_freq.to_csv('no_context_results/df_freq_edu2_context.csv')
 
-        # plot
-        sns.barplot(x='categories',y='mpr',data=df_freq)
-        plt.ylabel('MPR')
-        plt.title('MPR Performance against Popularity of Title')
-        plt.savefig('figures/nemo/final_skill_title_freq_error.png')
+        # # plot
+        # sns.barplot(x='categories',y='mpr',data=df_freq)
+        # plt.ylabel('MPR')
+        # plt.title('MPR Performance against Popularity of Title')
+        # plt.savefig('figures/nemo/final_skill_title_freq_error.png')
 
 
 
@@ -311,16 +312,17 @@ class NEMO(BaselineModel):
         df_roles = pd.DataFrame(array_roles,columns=['job_idx','num_roles','mpr'])
         df_roles = df_roles.groupby('num_roles').agg({'mpr': 'mean'}).reset_index()
         df_roles = df_roles[(df_roles['num_roles'] > 0) & (df_roles['num_roles'] <=20)]
+        df_roles.to_csv('no_context_results/df_roles_edu2_context.csv')
 
-        # plot
-        sns.set_style("darkgrid")
-        plt.plot(df_roles['num_roles'], df_roles['mpr'],linestyle='-',marker='o',color='b')
-        # axes = plt.gca()
-        # axes.set_ylim([0, 5])
-        plt.xlabel('Number of roles')
-        plt.ylabel('MPR')
-        plt.title('MPR Performance against Experience')
-        plt.savefig('figures/nemo/final_skill_num_roles_error.png')
+        # # plot
+        # sns.set_style("darkgrid")
+        # plt.plot(df_roles['num_roles'], df_roles['mpr'],linestyle='-',marker='o',color='b')
+        # # axes = plt.gca()
+        # # axes.set_ylim([0, 5])
+        # plt.xlabel('Number of roles')
+        # plt.ylabel('MPR')
+        # plt.title('MPR Performance against Experience')
+        # plt.savefig('figures/nemo/final_skill_num_roles_error.png')
 
         return self
 
@@ -330,7 +332,7 @@ class NEMO(BaselineModel):
 if __name__ == "__main__":
 
     model = NEMO(n_files=20,threshold=5)#,restore=True)
-    model.run_nemo_model(n_iter=30000,print_freq=2000,model_name='final_skill_edu2_5thres')
+    model.run_nemo_model(n_iter=30000,print_freq=2000,model_name='final_edu2_5thres')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
 
@@ -340,9 +342,9 @@ if __name__ == "__main__":
     # print(df_test)
     # df_test.to_csv('test_indiv_results.csv')
 
-    #
+
     # test agg graph stuff
-    # model.plot_error_analysis()
+    model.plot_error_analysis()
 
 
     # # test mpr

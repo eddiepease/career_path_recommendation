@@ -228,7 +228,7 @@ def save_processed_dfs_nemo(max_roles=10):
             person_emp_list = df['employment_history_norm'][j]
             complete_roles = 0
             if isinstance(person_emp_list, list):
-                if len(person_emp_list) > 0:
+                if len(person_emp_list) > 1:
                     # append sequence length
                     seq_len_array[j,] = len(person_emp_list)
                     if len(person_emp_list) == 0:

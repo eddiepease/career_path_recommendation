@@ -205,6 +205,8 @@ def save_processed_dfs_nemo(max_roles=10):
     t0 = time.time()
     print('t0:', t0)
 
+    num_positions = 0
+
     # job store
     # for i in range(0, 1):
     for i in range(0, len(files)):
@@ -228,7 +230,7 @@ def save_processed_dfs_nemo(max_roles=10):
             person_emp_list = df['employment_history_norm'][j]
             complete_roles = 0
             if isinstance(person_emp_list, list):
-                if len(person_emp_list) > 1:
+                if len(person_emp_list) > 0:
                     # append sequence length
                     seq_len_array[j,] = len(person_emp_list)
                     if len(person_emp_list) == 0:
@@ -264,6 +266,7 @@ def save_processed_dfs_nemo(max_roles=10):
                 #complete roles idx
                 if complete_roles == len(person_emp_list):
                     complete_roles_idx.append(j)
+                    num_positions += complete_roles
 
         key = 'file_' + str(i)
         # key = 'file_1'
@@ -358,6 +361,8 @@ def save_processed_dfs_nemo(max_roles=10):
     job_store.close()
     seqlen_store.close()
     label_store.close()
+
+    print('Number of positions:',num_positions)
 
     # # education test
     # df_final_1 = df_main_edu[df_main_edu['ranking'] == 'BLANK']

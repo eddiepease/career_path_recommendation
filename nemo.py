@@ -331,7 +331,7 @@ class NEMO(BaselineModel):
 
 if __name__ == "__main__":
 
-    model = NEMO(n_files=20,threshold=5)#,restore=True)
+    model = NEMO(n_files=20,threshold=5,restore=True)
     model.run_nemo_model(n_iter=30000,print_freq=2000,model_name='final_edu2_5thres')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
@@ -344,7 +344,7 @@ if __name__ == "__main__":
 
 
     # test agg graph stuff
-    model.plot_error_analysis()
+    # model.plot_error_analysis()
 
 
     # # test mpr

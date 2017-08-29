@@ -1,6 +1,8 @@
 import os
 import pickle
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
@@ -111,12 +113,44 @@ def plot_with_labels(low_dim_embs, labels, filename):
 
     plt.savefig(filename)
 
-def evaluate_with_tsne(embedding, num_to_plot, input_labels, filename):
-    tsne = TSNE(perplexity=40, n_components=2, init='pca', n_iter=5000)
+def plot_with_colour(low_dim_embs, labels, index_1,filename):
+    assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
+    # plt.figure(figsize=(18, 18)) # in inches
+    plt.figure()
 
-    labels = input_labels[:num_to_plot]
-    low_dim_embs = tsne.fit_transform(embedding[:num_to_plot, :])
-    plot_with_labels(low_dim_embs, labels, filename)
+    plt.scatter(low_dim_embs[:len(index_1),0],low_dim_embs[:len(index_1),1], color='b',label='Teaching Jobs')
+    plt.scatter(low_dim_embs[len(index_1):, 0], low_dim_embs[len(index_1):, 1], color='g', label='Developer Jobs')
+
+    plt.legend(loc='best')
+    plt.title('t-SNE plot of Teaching and Developer Job Embeddings')
+
+    plt.savefig(filename)
+    # plt.show()
+
+
+# def evaluate_with_tsne(embedding, num_to_plot, input_labels, filename):
+#     tsne = TSNE(perplexity=40, n_components=2, init='pca', n_iter=5000)
+#
+#     labels = input_labels[:num_to_plot]
+#     low_dim_embs = tsne.fit_transform(embedding[:num_to_plot, :])
+#     plot_with_labels(low_dim_embs, labels, filename)
+
+def evaluate_with_tsne(embedding,job_titles,filename):
+    tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000)
+    # plot_only = 300
+    teach_indices = [i for i, s in enumerate(job_titles) if 'teach' in s]
+    develop_indices = [i for i, s in enumerate(job_titles) if 'developer' in s]
+    plot_indices = teach_indices + develop_indices
+    print('Number of teach/develop jobs:',len(plot_indices))
+
+    teach_names = [s for i, s in enumerate(job_titles) if 'teach' in s]
+    develop_names = [s for i, s in enumerate(job_titles) if 'developer' in s]
+    plot_labels = teach_names + develop_names
+
+    low_dim_embs = tsne.fit_transform(embedding[plot_indices, :])
+    # labels = [self.reversed_job_dict[i] for i in range(len(plot_labels))]
+    # plot_with_labels(low_dim_embs, plot_labels)
+    plot_with_colour(low_dim_embs,plot_labels,teach_names,filename)
 
 
 
@@ -126,11 +160,12 @@ if __name__ == "__main__":
     # TODO: think about a good way to evaluate the embeddings in a more rigorous way
     # TODO: is there a different way to generate the embeddings
 
-    # # create job embedding
-    # job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same size as skill embedding
-    #
-    # #plot using TSNE
-    # evaluate_with_tsne(job_embedding,num_to_plot=800, input_labels=job_titles, filename='job_tsne_2.png')
+    # create job embedding
+    job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same size as skill embedding
 
-    save_job_embed_as_dict()
+    #plot using TSNE
+    # evaluate_with_tsne(job_embedding,num_to_plot=800, input_labels=job_titles, filename='job_tsne_2.png')
+    evaluate_with_tsne(job_embedding,job_titles,filename='test_tsne.png')
+
+    # save_job_embed_as_dict()
 

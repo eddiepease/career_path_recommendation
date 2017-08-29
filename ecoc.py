@@ -2,10 +2,11 @@ import time
 import numpy as np
 from scipy.spatial.distance import hamming
 from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
 
 from baseline_model import BaselineModel
 from embeddings.job_embedding import create_job_embedding
-from split_data import create_train_test_set_stratified
+from split_data import create_train_test_set_stratified_baseline
 
 
 def _check_estimator(estimator):
@@ -32,7 +33,7 @@ class ECOC(BaselineModel):
         print('creating code book...')
 
         # load data into object
-        self.load_transformed_data(save_name, remove_rare=True)
+        self.load_transformed_data(save_name)
 
         # import job embedding
         self.embedding, self.ordered_job_title = create_job_embedding(embedding_size=100)
@@ -123,11 +124,11 @@ class ECOC(BaselineModel):
 if __name__ == "__main__":
 
     # create train/test set
-    train, test = create_train_test_set_stratified(n_files=2, threshold=1)
+    train, test = create_train_test_set_stratified_baseline(n_files=1, threshold=1)
 
     # test ECOC
     folder = 'ecoc_test'
-    ecoc = ECOC(train,test,estimator=SVC(),n_classifiers=15)
+    ecoc = ECOC(train,test,estimator=LogisticRegression(),n_classifiers=15)
     # ecoc.save_transformed_data(embedding=True, weighted=False, save_name=folder)
     ecoc.create_code_book(save_name=folder)
     ecoc.fit()

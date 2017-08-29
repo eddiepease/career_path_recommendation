@@ -14,8 +14,9 @@ def create_job_embedding(embedding_size):
     skill_profile_dict = read_ontology_data('skill-profiles',file_type='pkl')
 
     # read in skills embedding
-    file_name = 'data/ontology/skill-word2vec-json/part-00000-f545a814-9c2f-420f-a022-2dd3fc62c30b.json'
-    skill_embeddings_dict = read_embeddings_json(file_name)
+    # file_name = 'data/ontology/skill-word2vec-json/part-00000-f545a814-9c2f-420f-a022-2dd3fc62c30b.json'
+    file_name_old = 'data/ontology/skill-word2vec/data/skill_embeddings.json'
+    skill_embeddings_dict = read_embeddings_json(file_name_old)
 
     # initialize numpy array
     data = np.empty(shape=(len(skill_profile_dict), embedding_size), dtype=np.float32)
@@ -70,29 +71,29 @@ def create_cv_skill_embeddings(skills, skill_embeddings_dict):
 
     return skill_embed
 
-# function to create skill embedding
-# TODO: this takes far too long to complete
-def create_weighted_cv_skill_embeddings(skills, skill_embeddings_dict,norm_feat_job):
-
-    # initialize
-    embedding_size = 100
-    skill_embed = np.zeros(shape=(embedding_size, ), dtype=np.float32)
-
-    # read in skills profiles + order + normalize TD-IDF scores
-    skill_profile_dict = read_ontology_data('skill-profiles', file_type='pkl')
-
-    # loop through the skills
-    for i,skill in enumerate(skills):
-        feat_job_skills = skill_profile_dict[norm_feat_job]
-        if skill in feat_job_skills[0]:
-            skill_idx = feat_job_skills[0].index(skill)
-            try:
-                skill_embed = skill_embed + skill_embeddings_dict[skill] * feat_job_skills[2][skill_idx]
-            except KeyError:
-                print('Missing skill is: ', skill)
-                pass
-
-    return skill_embed
+# # function to create skill embedding
+# # TODO: this takes far too long to complete
+# def create_weighted_cv_skill_embeddings(skills, skill_embeddings_dict,norm_feat_job):
+#
+#     # initialize
+#     embedding_size = 100
+#     skill_embed = np.zeros(shape=(embedding_size, ), dtype=np.float32)
+#
+#     # read in skills profiles + order + normalize TD-IDF scores
+#     skill_profile_dict = read_ontology_data('skill-profiles', file_type='pkl')
+#
+#     # loop through the skills
+#     for i,skill in enumerate(skills):
+#         feat_job_skills = skill_profile_dict[norm_feat_job]
+#         if skill in feat_job_skills[0]:
+#             skill_idx = feat_job_skills[0].index(skill)
+#             try:
+#                 skill_embed = skill_embed + skill_embeddings_dict[skill] * feat_job_skills[2][skill_idx]
+#             except KeyError:
+#                 print('Missing skill is: ', skill)
+#                 pass
+#
+#     return skill_embed
 
 
 def plot_with_labels(low_dim_embs, labels, filename):

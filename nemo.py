@@ -11,15 +11,18 @@ from collections import Counter
 from baseline_model import BaselineModel
 from read_data import read_ontology_data
 from split_data import create_train_test_set_stratified_nemo
+# from bn_lstm import LSTMCell,BNLSTMCell, orthogonal_initializer
 
 
-# TODO: think about adding education
 class NEMO(BaselineModel):
     def __init__(self, n_files,threshold=5, restore=False):
         self.threshold = threshold
         self.X_skill_train,self.X_skill_test = create_train_test_set_stratified_nemo(data_file_name='skill_store',
                                                                                      n_files=n_files,
                                                                                      threshold=self.threshold)
+        self.X_edu_train, self.X_edu_test = create_train_test_set_stratified_nemo(data_file_name='edu_store',
+                                                                                      n_files=n_files,
+                                                                                      threshold=self.threshold)
         self.X_job_train, self.X_job_test = create_train_test_set_stratified_nemo(data_file_name='job_store',
                                                                                       n_files=n_files,
                                                                                       threshold=self.threshold)
@@ -59,13 +62,14 @@ class NEMO(BaselineModel):
 
         return self
 
-    def generate_random_batches(self, X_skill, X_job, X_seqlen, y, batch_size):
+    def generate_random_batches(self, X_skill, X_edu, X_job, X_seqlen, y, batch_size):
         idx = np.random.randint(0,len(X_job),batch_size)
         X_skill_batch = X_skill[idx,:]
+        X_edu_batch = X_edu[idx,:]
         X_job_batch = X_job[idx,:,:]
         X_seqlen_batch = X_seqlen[idx,]
         y_batch = np.expand_dims(y[idx,],axis=1)
-        return X_skill_batch,X_job_batch,X_seqlen_batch, y_batch
+        return X_skill_batch,X_edu_batch,X_job_batch,X_seqlen_batch, y_batch
 
     def compute_graph(self):
         # define the compute graph with everything as 'self'
@@ -75,10 +79,11 @@ class NEMO(BaselineModel):
         self.sess = tf.Session()
 
         self.batch_size = 1000
-        self.max_roles = 10
+        self.max_roles = 20
         self.embedding_size = 100
+        self.education_size = 504
         self.n_linear_hidden = self.embedding_size
-        self.n_lstm_hidden = 100
+        self.n_lstm_hidden = 50
         self.number_of_layers = 3
 
         ###########
@@ -86,16 +91,18 @@ class NEMO(BaselineModel):
         ###########
 
         self.max_pool_skills = tf.placeholder(dtype=tf.float32,shape=(None,self.embedding_size))
+        # self.education = tf.placeholder(dtype=tf.float32,shape=(None,self.education_size))
         # add university perhaps in the future + location
 
         # one layer NN
         with tf.variable_scope("encoder"):
+            # self.concat_rep = tf.concat([self.max_pool_skills,self.education],axis=1)
             self.concat_rep = self.max_pool_skills
-            self.W_linear = tf.Variable(tf.truncated_normal(shape=(int(self.concat_rep.get_shape()[1]),self.n_linear_hidden)))
-            self.b_linear = tf.Variable(tf.constant(0.1,shape=(self.n_linear_hidden,)))
+            self.W_linear = tf.get_variable("W_linear",shape=(int(self.concat_rep.get_shape()[1]),self.n_linear_hidden),
+                                            initializer=tf.contrib.layers.xavier_initializer())
+            self.b_linear = tf.Variable(tf.constant(0.0,shape=(self.n_linear_hidden,)))
             self.encoder_output = tf.tanh(tf.matmul(self.concat_rep,self.W_linear) + self.b_linear)
-            # self.encoder_output = tf.Variable(tf.truncated_normal(shape=(None,
-            #                                                              int(self.max_pool_skills.get_shape()[1]))))
+
 
         ###########
         # decoder
@@ -108,26 +115,37 @@ class NEMO(BaselineModel):
         self.encoder_output = tf.expand_dims(self.encoder_output,axis=1)
         self.encoded_job_inputs = tf.concat([self.encoder_output,self.job_inputs],axis=1)
         self.lstm = tf.contrib.rnn.BasicLSTMCell(self.n_lstm_hidden, state_is_tuple=True)
-        # self.lstm = tf.nn.rnn_cell.GRUCell(self.n_lstm_hidden)
+        # self.lstm = BNLSTMCell(self.n_lstm_hidden,self.training)
+        # self.lstm = tf.contrib.rnn.GRUCell(self.n_lstm_hidden)
         # self.stacked_lstm = tf.contrib.rnn.MultiRNNCell(cells=[self.lstm for _ in range(self.number_of_layers)],state_is_tuple=True)
 
-        with tf.variable_scope("decoder"):
+        with tf.variable_scope("decoder",initializer=tf.contrib.layers.xavier_initializer()):
             self.job_outputs, self.last_states = tf.nn.dynamic_rnn(self.lstm, self.encoded_job_inputs,
                                                     sequence_length=self.seqlen,
-                                                    initial_state=self.lstm.zero_state(tf.shape(self.job_inputs)[0], tf.float32))
+                                                    dtype=tf.float32)
+                                                    # initial_state=self.lstm.zero_state(tf.shape(self.job_inputs)[0], tf.float32))
 
         # output
         # self.final_job_output = tf.gather_nd(self.job_outputs,self.seqlen)
         self.actual_batch_size = tf.shape(self.job_inputs)[0]
         self.final_job_output = tf.gather_nd(self.job_outputs, tf.stack([tf.range(self.actual_batch_size), self.seqlen - 1], axis=1))
 
-        self.W_output = tf.Variable(tf.truncated_normal(shape=(self.n_lstm_hidden, self.n_unique_jobs)))
-        self.b_output = tf.Variable(tf.constant(0.1, shape=(self.n_unique_jobs,)))
+        self.W_output = tf.get_variable("W_output",shape=(self.n_lstm_hidden, self.n_unique_jobs),
+                                        initializer=tf.contrib.layers.xavier_initializer())
+                                        # initializer=orthogonal_initializer())
+        self.b_output = tf.Variable(tf.constant(0.0, shape=(self.n_unique_jobs,)))
         self.logits = tf.matmul(self.final_job_output,self.W_output) + self.b_output
 
         self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.squeeze(self.job_true,axis=1),
                                                                                   logits=self.logits))
-        self.train_step = tf.train.AdamOptimizer().minimize(self.loss)
+        # self.train_step = tf.train.AdamOptimizer().minimize(self.loss)
+
+        # gradient capping
+        self.optimizer = tf.train.AdamOptimizer()
+        self.gvs = self.optimizer.compute_gradients(self.loss)
+        self.capped_gvs = [(None if grad is None else tf.clip_by_value(grad, -1., 1.), var) for grad, var in self.gvs]
+        self.train_step = self.optimizer.apply_gradients(self.capped_gvs)
+
         self.test_probs = tf.nn.softmax(self.logits) # shape: [batch_size x unique_jobs]
 
         return self
@@ -157,12 +175,14 @@ class NEMO(BaselineModel):
             self.sess.run(tf.global_variables_initializer())
 
             for iter in range(n_iter):
-                X_skill_batch,X_job_batch,X_seqlen_batch, y_batch = self.generate_random_batches(self.X_skill_train,
+                X_skill_batch,X_edu_batch, X_job_batch,X_seqlen_batch, y_batch = self.generate_random_batches(self.X_skill_train,
+                                                                                                 self.X_edu_train,
                                                                                                  self.X_job_train,
                                                                                                  self.seqlen_train,
                                                                                                  self.y_train,
                                                                                                  batch_size=self.batch_size)
                 train_feed_dict = {self.max_pool_skills: X_skill_batch,
+                                   # self.education: X_edu_batch,
                                    self.job_inputs: X_job_batch[:,:self.max_roles-1,:],
                                    self.seqlen: X_seqlen_batch,
                                    self.job_true: y_batch}
@@ -170,6 +190,7 @@ class NEMO(BaselineModel):
 
                 if iter % print_freq == 0:
                     test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                                      # self.education: self.X_edu_test,
                                       self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
                                       self.seqlen: self.seqlen_test,
                                       self.job_true: np.expand_dims(self.y_test, axis=1)}
@@ -181,8 +202,8 @@ class NEMO(BaselineModel):
                     print('Test Loss:', test_loss)
 
             # saving model
-            if not os.path.exists(model_name):
-                os.mkdir(model_name)
+            if not os.path.exists(folder_name):
+                os.mkdir(folder_name)
             saver.save(self.sess, folder_name + file_name)
 
         return self
@@ -191,6 +212,7 @@ class NEMO(BaselineModel):
         # evaluate relevant variables from compute graph
         print('evaluating...')
         test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                          # self.education: self.X_edu_test,
                           self.job_inputs: self.X_job_test[:,:self.max_roles-1,:],
                           self.seqlen: self.seqlen_test,
                           self.job_true: np.expand_dims(self.y_test, axis=1)}
@@ -203,13 +225,16 @@ class NEMO(BaselineModel):
 
         return mpr
 
-    def test_individual_examples(self,idx_list):
+    def test_individual_examples(self,idx_list, num_pred_show = 10):
 
         # initialize
-        results_columns = ['job_1','job_2','job_3','job_4','job_5','job_6','job_7','job_8','job_9','job_10','prediction']
-        df_results = pd.DataFrame(index=idx_list,columns=results_columns)
+        jobs_index = ['job_' + str(i + 1) for i in range(self.max_roles)]
+        results_index = ['prediction_' + str(i + 1) for i in range(num_pred_show)]
+        whole_index = jobs_index + results_index
+        df_results = pd.DataFrame(index=whole_index,columns=idx_list)
 
         test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                          # self.education: self.X_edu_test,
                           self.job_inputs: self.X_job_test[:, :self.max_roles - 1, :],
                           self.seqlen: self.seqlen_test,
                           self.job_true: np.expand_dims(self.y_test, axis=1)}
@@ -219,21 +244,29 @@ class NEMO(BaselineModel):
         # loop through df
         for idx in idx_list:
             row = self.df_test.iloc[idx,:][0]
+            # TODO: test
             for i in range(len(row)):
-                col = 'job_' + str(i+1)
-                df_results.loc[idx,col] = row[i]['title_norm']
+                pos = len(row) - 1 - i
+                col = 'job_' + str(pos+1)
+                df_results.loc[col,idx] = row[i]['title_norm']
 
             # prediction
-            prediction_idx = np.argmax(test_probs,axis=1)[idx]
-            prediction_title = self.reverse_job_dict[self.reverse_job_reduce_dict[prediction_idx]]
-            df_results.loc[idx,'prediction'] = prediction_title
+            prediction_idxes = test_probs[idx].argsort()[::-1][:num_pred_show]
+            # prediction_idx = np.argmax(test_probs,axis=1)[idx]
+            prediction_titles = [self.reverse_job_dict[self.reverse_job_reduce_dict[prediction_idxes[j]]] for j in range(num_pred_show)]
+            for k in range(num_pred_show):
+                col = 'prediction_' + str(k+1)
+                df_results.loc[col,idx] = prediction_titles[k]
 
         return df_results
 
     def plot_error_analysis(self):
 
+        print('Plotting performance analysis...')
+
         # calculate mpr list
         test_feed_dict = {self.max_pool_skills: self.X_skill_test,
+                          # self.education: self.X_edu_test,
                           self.job_inputs: self.X_job_test[:, :self.max_roles - 1, :],
                           self.seqlen: self.seqlen_test,
                           self.job_true: np.expand_dims(self.y_test, axis=1)}
@@ -258,11 +291,13 @@ class NEMO(BaselineModel):
         group_names = ['<50', '50-100', '100-500', '500-2000', '>2000']
         df_freq['categories'] = pd.cut(df_freq['count'], bins, labels=group_names)
         df_freq = df_freq.groupby('categories').agg({'mpr':'mean'}).reset_index()
+        df_freq.to_csv('no_context_results/df_freq_edu2_context.csv')
 
-        # plot
-        sns.barplot(x='categories',y='mpr',data=df_freq)
-        plt.title('MPR Performance against Popularity of Title')
-        plt.savefig('figures/nemo/title_freq_error.png')
+        # # plot
+        # sns.barplot(x='categories',y='mpr',data=df_freq)
+        # plt.ylabel('MPR')
+        # plt.title('MPR Performance against Popularity of Title')
+        # plt.savefig('figures/nemo/final_skill_title_freq_error.png')
 
 
 
@@ -270,15 +305,24 @@ class NEMO(BaselineModel):
         # mpr against number of roles
         #################
 
+        plt.clf()
+
         # aggregate
         array_roles = np.transpose(np.array([self.y_test,self.seqlen_test,mpr_list]))
         df_roles = pd.DataFrame(array_roles,columns=['job_idx','num_roles','mpr'])
         df_roles = df_roles.groupby('num_roles').agg({'mpr': 'mean'}).reset_index()
+        df_roles = df_roles[(df_roles['num_roles'] > 0) & (df_roles['num_roles'] <=20)]
+        df_roles.to_csv('no_context_results/df_roles_edu2_context.csv')
 
-        # plot
-        sns.factorplot(x='num_roles', y='mpr', data=df_roles)
-        plt.title('MPR Performance against Experience')
-        plt.savefig('figures/nemo/num_roles_error.png')
+        # # plot
+        # sns.set_style("darkgrid")
+        # plt.plot(df_roles['num_roles'], df_roles['mpr'],linestyle='-',marker='o',color='b')
+        # # axes = plt.gca()
+        # # axes.set_ylim([0, 5])
+        # plt.xlabel('Number of roles')
+        # plt.ylabel('MPR')
+        # plt.title('MPR Performance against Experience')
+        # plt.savefig('figures/nemo/final_skill_num_roles_error.png')
 
         return self
 
@@ -287,20 +331,20 @@ class NEMO(BaselineModel):
 
 if __name__ == "__main__":
 
-    model = NEMO(n_files=20,restore=True)
-    # print(model.X_job_train.shape)
-    # # model.restore_nemo_model(model_name='first_run')
-    model.run_nemo_model(n_iter=25000,print_freq=1000,model_name='baseline_clean_run')
+    model = NEMO(n_files=20,threshold=5,restore=True)
+    model.run_nemo_model(n_iter=25000,print_freq=2000,model_name='final_skill_5thres')
     mpr = model.evaluate_nemo()
     print('MPR:',mpr)
 
-    # # test print individual examples
-    # test_list = [1,2]
-    # df_test = model.test_individual_examples(idx_list=test_list)
-    # print(df_test)
+    # test print individual examples
+    test_list = list(range(100))
+    df_test = model.test_individual_examples(idx_list=test_list,num_pred_show=20)
+    print(df_test)
+    df_test.to_csv('no_context_results/final_skill_indiv.csv')
+
 
     # test agg graph stuff
-    model.plot_error_analysis()
+    # model.plot_error_analysis()
 
 
     # # test mpr

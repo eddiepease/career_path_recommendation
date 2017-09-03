@@ -10,18 +10,18 @@ Every job site aims to present their users with a selection of highly relevant j
 
 A couple of visualizations of the dataset that was used:
 
-![alt text](https://raw.githubusercontent.com/eddietheeagle1/career_path_recommendation/master/images/final_job_wordcloud.jpg)
+![Alt text](images/final_job_wordcloud.jpg)
 
-![alt text](https://raw.githubusercontent.com/eddietheeagle1/career_path_recommendation/master/images/recent_job_category.png)
+![Alt text](images/recent_job_category.png)
 
 
 ## Recommendations made by the model
 
 Below are a couple of sample career paths and the top 10 recommendations made by the model. The 'actual' next job title is shown in red.
 
-![alt text](https://raw.githubusercontent.com/eddietheeagle1/career_path_recommendation/master/images/career_1.png)
+![Alt text](images/career_1.png)
 
-![alt text](https://raw.githubusercontent.com/eddietheeagle1/career_path_recommendation/master/images/career_2.png)
+![Alt text](images/career_2.png)
 
 
 ## Description of files

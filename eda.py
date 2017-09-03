@@ -9,7 +9,7 @@ from wordcloud import WordCloud
 from fuzzywuzzy import fuzz
 import gmplot
 
-from read_data import read_all_json_data,read_ontology_data,read_general_csv, CVJobNormalizer
+from read_data import read_all_json_data,read_ontology_data,read_general_csv, CVJobNormalizer,read_single_json_data
 
 
 # class used for any exploratory data analysis - both transformation and visualization methods
@@ -34,6 +34,10 @@ class ExploratoryDataAnalysis():
 
     def number_of_roles(self):
         temp_df = self.df['employment_history_norm'].apply(len)
+        temp_df = pd.DataFrame(temp_df.value_counts()).reset_index()
+        temp_df = temp_df[temp_df['index'] <= 20]
+        temp_df.sort_values('index',inplace=True)
+        temp_df['employment_history_norm'] = temp_df['employment_history_norm'] / temp_df['employment_history_norm'].max()
         self.transformed_df = temp_df
 
 
@@ -117,9 +121,6 @@ class ExploratoryDataAnalysis():
         self.transformed_df.sort_values('count', ascending=False, inplace=True)
         self.transformed_df = self.transformed_df[['count','category_name']]
 
-    # TODO: check whether the qualification is working as expected
-    # TODO: replace criteria with James' code
-    # TODO: find a better way of displaying this information visualy
     def attended_university(self):
         print('Start attended_university method..')
         uni = []
@@ -150,8 +151,6 @@ class ExploratoryDataAnalysis():
         # print(freq_df)
         self.transformed_df = freq_df
 
-    # TODO: add age vs university
-
 
     # note that this method saves a html file in figures folder
     # you need to screenshot locally to get a png
@@ -178,7 +177,6 @@ class ExploratoryDataAnalysis():
         gmap.heatmap(lats, lngs)
         gmap.draw(file_location)
 
-    # TODO: add wordcloud of skills
 
     ##########
     # visualization methods
@@ -188,13 +186,14 @@ class ExploratoryDataAnalysis():
         sns.distplot(self.transformed_df,ax=axis).set(xlabel=xlabel_name)
 
     def generate_word_cloud(self,file,title,save_location):
-        job_freq_dict = pickle.load(open("job_freq.pkl","rb"))
-        wordcloud = WordCloud().generate_from_frequencies(job_freq_dict)
+        job_freq_dict = pickle.load(open(self.job_title_location + "cvs_v4_job_freq.pkl","rb"))
+        wordcloud = WordCloud(width=800,height=400).generate_from_frequencies(job_freq_dict)
 
         plt.imshow(wordcloud, interpolation='bilinear')
         plt.axis("off")
         plt.title(title)
-        plt.savefig(save_location + file)
+        plt.tight_layout(pad=0)
+        plt.savefig(save_location + file,dpi=100)
 
     def generate_bar_chart(self,xlabel_name, axis=None):
         [first_column_name, second_column_name] = self.transformed_df.columns
@@ -224,15 +223,28 @@ if __name__ == '__main__':
 
     # read data
     df = read_all_json_data(folder='data/cvs_v4/')
-    print(df.columns)
+    # df = read_single_json_data(num_file=1,folder='data/cvs_v4/')
+    # print(df.columns)
 
     # transform data
     eda = ExploratoryDataAnalysis(df,job_title_location='data/')
+    eda.number_of_roles()
+    eda.generate_bar_chart(xlabel_name='Number of roles')
+
+    plt.ylabel('Frequency')
+    plt.title('Bar Chart of Number of Roles')
+    plt.savefig('figures/whole_jobsite_data/cvs_v4/final_num_roles.png')
+
+    # eda.most_recent_job_title(file_name='cvs_v4_job_freq')
+
+    # eda.generate_word_cloud(file='final_job_wordcloud.jpg',
+    #                         title='Job Title Wordcloud',
+    #                         save_location='figures/whole_jobsite_data/cvs_v4/')
     # eda.most_recent_job_title(file_name='cvs_v3_job_freq')
     # eda.most_recent_job_category(job_title_filename='cvs_v3_job_freq')
-    eda.number_of_roles()
-    print(eda.transformed_df.shape)
-    print(eda.transformed_df.value_counts())
+    # eda.number_of_roles()
+    # print(eda.transformed_df.shape)
+    # print(eda.transformed_df.value_counts())
     # eda.work_experience_years()
 
     # # map plot

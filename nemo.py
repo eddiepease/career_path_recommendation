@@ -244,7 +244,6 @@ class NEMO(BaselineModel):
         # loop through df
         for idx in idx_list:
             row = self.df_test.iloc[idx,:][0]
-            # TODO: test
             for i in range(len(row)):
                 pos = len(row) - 1 - i
                 col = 'job_' + str(pos+1)
@@ -337,10 +336,10 @@ if __name__ == "__main__":
     print('MPR:',mpr)
 
     # test print individual examples
-    test_list = list(range(100))
+    test_list = list(range(2000,2100))
     df_test = model.test_individual_examples(idx_list=test_list,num_pred_show=20)
     print(df_test)
-    df_test.to_csv('no_context_results/final_skill_indiv.csv')
+    df_test.to_csv('no_context_results/final_skill_indiv_2.csv')
 
 
     # test agg graph stuff

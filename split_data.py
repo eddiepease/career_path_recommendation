@@ -116,7 +116,6 @@ def compare_cv_dfs(df_1,df_2,folder_name):
     eda_2 = ExploratoryDataAnalysis(df=df_2,job_title_location='figures/compare_datasets/')
 
     # years in employment
-    # TODO: add y_label
     print('working out years in employment...')
     eda_1.work_experience_years()
     eda_2.work_experience_years()
@@ -130,7 +129,6 @@ def compare_cv_dfs(df_1,df_2,folder_name):
                            ylabel='Frequency',
                            save_location=path + 'work_experience_years.png')
 
-    # TODO: complete this - need to complete eda visualization first
     # # # number of roles
     # # print('working out number of roles...')
     # # eda_1.number_of_roles()
@@ -196,7 +194,6 @@ def compare_cv_dfs(df_1,df_2,folder_name):
 
 if __name__ == "__main__":
 
-    # # TODO: get the auto plot comparisons to work
     # train, test = create_train_test_set_stratified_baseline(n_files=1)
     # print(train.shape)
     # print(test.shape)

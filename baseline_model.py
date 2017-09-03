@@ -15,7 +15,7 @@ from sklearn.naive_bayes import MultinomialNB
 
 from read_data import read_ontology_data,read_embeddings_json
 from split_data import create_train_test_set, create_train_test_set_stratified_baseline
-from embeddings.job_embedding import create_job_embedding,create_cv_skill_embeddings,create_weighted_cv_skill_embeddings
+from embeddings.job_embedding import create_job_embedding,create_cv_skill_embeddings
 
 
 # class for a baseline model

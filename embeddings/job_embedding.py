@@ -74,7 +74,6 @@ def create_cv_skill_embeddings(skills, skill_embeddings_dict):
     return skill_embed
 
 # # function to create skill embedding
-# # TODO: this takes far too long to complete
 # def create_weighted_cv_skill_embeddings(skills, skill_embeddings_dict,norm_feat_job):
 #
 #     # initialize
@@ -155,10 +154,6 @@ def evaluate_with_tsne(embedding,job_titles,filename):
 
 
 if __name__ == "__main__":
-
-    # TODO: something gimmicky with vector maths
-    # TODO: think about a good way to evaluate the embeddings in a more rigorous way
-    # TODO: is there a different way to generate the embeddings
 
     # create job embedding
     job_embedding, job_titles = create_job_embedding(embedding_size=100) # this must be the same size as skill embedding
